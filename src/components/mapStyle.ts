@@ -1,5 +1,5 @@
 import type { ExpressionSpecification, StyleSpecification } from 'maplibre-gl';
-export type DisplayPreset = 'clean' | 'standard' | 'detailed';
+export type DisplayPreset = 'clean' | 'detailed';
 export interface DisplayOptions { preset: DisplayPreset; buildings: boolean; }
 const source = 'openmaptiles';
 const tileUrl=import.meta.env.VITE_VECTOR_TILEJSON || 'https://tiles.openfreemap.org/planet';
@@ -19,6 +19,7 @@ export function createMapStyle(): StyleSpecification {
       { id: 'roads-major', type: 'line', source, 'source-layer': 'transportation', filter: ['match',['get','class'],['motorway','trunk','primary','secondary'],true,false], layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#c0c8b8','line-width':['interpolate',['linear'],['zoom'],10,1,14,2.5,18,12]} },
       { id: 'paths', type: 'line', source, 'source-layer': 'transportation', minzoom: 14, filter:['match',['get','class'],['path','track'],true,false], layout:{visibility:'none'},paint:{'line-color':'#c8d0bb','line-width':1,'line-dasharray':[2,2]} },
       { id: 'existing-rail', type: 'line', source, 'source-layer': 'transportation', filter:['match',['get','class'],['rail','transit'],true,false],layout:{visibility:'none'},paint:{'line-color':'#b1b8ae','line-width':1,'line-dasharray':[3,3]} },
+      { id:'building-footprints',type:'fill',source:'building-tiles','source-layer':'building',minzoom:13,paint:{'fill-color':'#d9dfd1','fill-outline-color':'#b3c0a7','fill-opacity':.8} },
       { id: 'buildings-3d', type: 'fill-extrusion', source:'building-tiles', 'source-layer': 'building', minzoom: 14, filter:['!=',['get','hide_3d'],true],layout:{visibility:'none'},paint:{'fill-extrusion-color':'#d0d7c9','fill-extrusion-height':['coalesce',['get','render_height'],10],'fill-extrusion-base':['coalesce',['get','render_min_height'],0],'fill-extrusion-opacity':.85} },
       { id:'labels-places',type:'symbol',source,'source-layer':'place',minzoom:9,filter:['match',['get','class'],['city','town','suburb','quarter','borough'],true,false],layout:{visibility:'none','text-field':text,'text-font':['Noto Sans Regular'],'text-size':12,'text-letter-spacing':.08,'text-transform':'uppercase','text-max-width':9},paint:{'text-color':'#7b8b74','text-halo-color':'#f0f0e8','text-halo-width':2} },
       { id:'labels-neighborhoods',type:'symbol',source,'source-layer':'place',minzoom:12,filter:['match',['get','class'],['neighbourhood','village','hamlet'],true,false],layout:{visibility:'none','text-field':text,'text-font':['Noto Sans Regular'],'text-size':10},paint:{'text-color':'#89927e','text-halo-color':'#f0f0e8','text-halo-width':1.5} },

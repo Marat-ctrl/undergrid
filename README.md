@@ -15,7 +15,7 @@ Open the localhost URL printed by Vite. `npm run build` checks TypeScript and cr
 
 ## Explore New York
 
-Choose **New Game → New York → Start**. Drag to pan and scroll to zoom. Right-drag (or Ctrl + drag) vertically to tilt, horizontally to rotate, or diagonally to change both. The dominant axis is locked for each gesture. Use Map display for Clean, Standard and Detailed presets, 3D building visibility, without permanent camera sliders. The cube toggles a tilted view; the compass resets the view. Escape opens the menu, where you can resume or return to the main menu.
+Choose **New Game → New York → Start**. Drag to pan and scroll to zoom. Right-drag (or Ctrl + drag) vertically to tilt, horizontally to rotate, or diagonally to change both. Both camera axes remain available throughout the gesture. Use the compact Clean and Detailed selector; Clean shows flat building footprints at street zoom; Detailed includes 3D buildings. The cube toggles a tilted view; the compass faces north while preserving position, zoom and tilt. Escape opens the menu, where you can resume or return to the main menu.
 
 The world covers all five boroughs and nearby parts of New Jersey, Westchester, and western Long Island. Map navigation and the tile source are bounded to longitude -74.32 to -73.65 and latitude 40.47 to 40.98. The boundary is a rectangular regional crop, not an administrative city boundary.
 
@@ -33,3 +33,11 @@ The main-menu illustration is decorative; the world itself uses real OSM cartogr
 - Previous experimental gameplay code remains in `src/Prototype.tsx`, `src/simulation`, and the earlier 3D components. It is not mounted by the current app. Construction, simulation and economy are outside this milestone's visible experience and will be integrated into the real city in later agreed stages.
 
 Code and interface text are in English. Local preview only; no cloud account or deployment is required.
+
+## Local quick save (alpha)
+
+Starting a world immediately writes `saves/quick-save.json` through the local Vite server. Camera position, zoom, tilt, bearing and the Clean/Detailed preset are saved automatically. Reloading the page restores the active world. Choosing Main menu deliberately leaves the world and records that choice, so reload stays in the menu. Starting a new world replaces the quick save.
+
+The save is shared by browsers connected to the same project server and remains after restarting it. It is excluded from Git. Writes are atomic and serialized; older requests cannot overwrite newer saves. A save failure is shown in the interface. The map still requires an internet connection.
+
+Use `npm run dev`, or `npm run build` followed by `npm run preview`. Both local servers expose the save endpoint. Opening `dist/index.html` directly or using a generic static host does not provide file saving.
