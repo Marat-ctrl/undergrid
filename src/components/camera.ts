@@ -5,6 +5,8 @@ export function cameraDelta(pitch:number,bearing:number,dx:number,dy:number){
 // Building tiles must not lose their building layer as they recede toward the horizon.
 // The provider's detailed building data is available at zooms 13 and 14.
 export function buildingTileZoom(centerZoom:number){return Math.min(14,Math.max(13,Math.floor(centerZoom)));}
+// Retain local rail detail across the pitched viewport instead of dropping tunnel segments in coarse horizon tiles.
+export function railTileZoom(){return 14;}
 export function attachCameraGesture(map:Map){
   const canvas=map.getCanvas();
   let drag:{id:number;x:number;y:number;startX:number;startY:number;started:boolean}|null=null;

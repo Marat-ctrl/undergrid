@@ -13,7 +13,7 @@ test('quick save persists on disk, survives a new server and rejects invalid ove
   let {server,url}=await start();
   try{
     assert.equal(await (await fetch(url)).json(),null);
-    const save={version:1,city:'new-york',active:true,updatedAt:100,camera:{...DEFAULT_CAMERA,zoom:15.4,pitch:50,bearing:35},preset:'detailed',analysis:{mode:'jobs'}};
+    const save={version:1,city:'new-york',active:true,updatedAt:100,camera:{...DEFAULT_CAMERA,zoom:15.4,pitch:50,bearing:35},preset:'detailed',analysis:{mode:'jobs'},planning:{existingRail:true,foundations:false,plannedDepth:64}};
     assert.equal((await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(save)})).status,200);
     assert.deepEqual(JSON.parse(await readFile(join(root,'saves','quick-save.json'),'utf8')),save);
     await new Promise<void>(resolve=>server.close(()=>resolve()));({server,url}=await start());

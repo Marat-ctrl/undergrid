@@ -55,3 +55,19 @@ Packaged files in `public/data/` contain 2,325 shoreline-clipped tracts, all **8
 Both maps load locally without API keys. The OpenStreetMap basemap still needs internet access. The last published New York WAC year at implementation was 2023; see the official [LODES New York WAC index](https://lehd.ces.census.gov/data/lodes/LODES8/ny/wac/) and [LODES documentation](https://lehd.ces.census.gov/data/lehd-code-samples/sections/lodes.html).
 
 Regenerate population geometry with `python3 scripts/prepare-demographics.py TRACTS CENSUS BOROUGHS`: GeoJSON from NYC Open Data datasets `63ge-mke6` and `gthc-hcne`, and JSON from `https://tigerweb.geo.census.gov/arcgis/rest/services/Census2020/tigerWMS_Census2020/MapServer/6/query` using `where=STATE='36' AND COUNTY IN ('005','047','061','081','085')`, `outFields=GEOID,POP100,AREALAND,INTPTLAT,INTPTLON`, `returnGeometry=false`, `f=json`. Then run `python3 scripts/prepare-jobs.py WAC_CSV_GZ 2023` with `https://lehd.ces.census.gov/data/lodes/LODES8/ny/wac/ny_wac_S000_JT00_2023.csv.gz`. Generators reject missing joins, duplicate identifiers and inconsistent totals. Tests verify mode migration, saved settings, units, population totals, jobs totals and density joins.
+
+## Credits
+
+Open **Credits** from the main menu for map/data attribution, source links and the OpenStreetMap ODbL license. Links are grouped by map/geography and population/jobs/boundaries. The loading screen, world HUD and density legend contain no external source links. Legends retain the data year, units and coverage. Attribution is provided through the game’s Credits page, following the OpenStreetMap Foundation’s [computer games and simulations guidance](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines#Computer_games_and_simulations).
+
+Detailed uses a restrained label hierarchy: areas at wider zoom, major streets with spaced labels, and selected high-priority parks, stadiums, museums and historic landmarks. Shops, cafés, offices, services, indoor POIs and minor street labels are omitted.
+
+### Underground planning overlays
+
+Map layers includes independent **Existing rail** visibility and **Foundations — estimated** with a planned centreline depth of 5–100 m. Rail uses mapped OpenMapTiles transportation rail/transit features: bridges are blue, tagged tunnels are dashed purple, and surface/untagged alignments green. Missing tags or alignments do not prove that a corridor is clear; tunnel depths are unknown.
+
+Foundation footprints use an explicit gameplay proxy, not observed foundation depths. For usable `render_height` H, the proxy interval is `[max(3, 0.06H), max(6, 4 + 0.12H)]` metres. Heights may themselves be inferred from building levels. The illustrative tunnel roof is planned centreline depth minus 3 m, with a 2 m buffer. Red indicates potential overlap with the shallow bound; amber uncertain clearance within the deeper bound; blue lower proxy risk; gray unknown height. No color authorizes construction. Ground-relative depth assumes uniform ground; geology, actual foundations, utilities, terrain and verified underground infrastructure remain future work. This is a visible-tile overlay, not a complete city collision database.
+
+Foundation mode shows flat footprints and switches density off to keep its colors readable. Rail can accompany any analysis map. Settings persist in local quicksave and older saves remain supported.
+
+Rail uses a separate vector source with tile detail held at zoom 14 across the pitched viewport to retain distant mapped tunnel and local rail segments. A 128 px source tile size also preserves more detail at lower pitches; rail widths compensate for that scale. This can request more tiles than the adaptive basemap.

@@ -1,9 +1,10 @@
+import { applyPlanningLayers, foundationRange, foundationRisk } from './underground';
 import { useEffect, useRef } from 'react';
 import * as maplibre from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { ANALYSIS_SOURCE_IDS, applyAnalysisLayers, installAnalysisLayers, loadAnalysisData, type AnalysisStatus } from './analysisLayers';
-import { attachCameraGesture, buildingTileZoom } from './camera';
+import { attachCameraGesture, buildingTileZoom, railTileZoom } from './camera';
 import type { SavedCamera } from '../gameSave';
 import { createMapStyle, type DisplayOptions } from './mapStyle';
 
@@ -56,7 +57,7 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
         if(analysisLoading)return;analysisLoading=true;callbacks.current.onAnalysis('loading');
         void loadAnalysisData(analysisAbort.signal).then(data=>{if(!active)return;installAnalysisLayers(map!,data);applyDisplay(map!,displayRef.current);callbacks.current.onAnalysis('ready');}).catch(()=>{if(active)callbacks.current.onAnalysis('error');}).finally(()=>{analysisLoading=false;});
       };
-      map.on('style.load',()=>{if(!active)return;const buildings=map!.getSource('building-tiles');if(buildings)buildings.calculateTileZoom=buildingTileZoom;applyDisplay(map!,displayRef.current);ensureAnalysis.current();});
+      map.on('style.load',()=>{if(!active)return;const buildings=map!.getSource('building-tiles');if(buildings)buildings.calculateTileZoom=buildingTileZoom;const rail=map!.getSource('rail-tiles');if(rail){rail.tileSize=128;rail.calculateTileZoom=railTileZoom;}applyDisplay(map!,displayRef.current);ensureAnalysis.current();});
       removeGesture=attachCameraGesture(map);
       map.on('error', (event) => { if (!active) return;const sourceId=(event as typeof event & {sourceId?:string}).sourceId;if(sourceId&&ANALYSIS_SOURCE_IDS.includes(sourceId)){callbacks.current.onAnalysis('error');return;}failed = true; callbacks.current.onStatus('error'); });
       map.on('idle', () => {
@@ -70,6 +71,10 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
         const canvas=map!.getCanvas();canvas.setAttribute('aria-label',`New York map. Tilt ${Math.round(map!.getPitch())} degrees. Bearing ${Math.round(map!.getBearing())} degrees.`);
       });
       map.on('click',event=>{
+        if(displayRef.current.foundations&&map?.getLayer('foundation-risk')){
+          const building=map.queryRenderedFeatures(event.point,{layers:['foundation-risk']})[0];
+          if(building){popupRef.current?.remove();const height=typeof building.properties.render_height==='number'?building.properties.render_height:null;const range=foundationRange(height);const node=document.createElement('div');node.className='tract-popup';const title=document.createElement('strong');title.textContent='Foundation · game estimate';node.append(title);const line=document.createElement('p');line.textContent=range?`Proxy depth: ${Math.round(range[0])}–${Math.round(range[1])} m`:'Unknown · no usable height';node.append(line);const status=document.createElement('p');const risk=foundationRisk(height,displayRef.current.plannedDepth);status.textContent=`Planned depth ${displayRef.current.plannedDepth} m · ${risk==='overlap'?'Potential overlap':risk==='uncertain'?'Uncertain clearance':risk==='lower'?'Lower proxy risk':'Unknown'}`;node.append(status);const note=document.createElement('small');note.textContent='Height-based gameplay proxy. Actual foundations, utilities and tunnel depths are not verified.';node.append(note);popupRef.current=new maplibre.Popup({closeOnClick:false,maxWidth:'290px'}).setLngLat(event.lngLat).setDOMContent(node).addTo(map);return;}
+        }
         if(!map?.getLayer('tract-hit-area')||displayRef.current.mode==='off')return;
         const feature=map.queryRenderedFeatures(event.point,{layers:['tract-hit-area']})[0];
         popupRef.current?.remove();if(!feature)return;
@@ -84,7 +89,7 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
         if(jobsMode){const note=document.createElement('small');note.textContent='All covered jobs at workplaces, including secondary jobs.';node.append(note);}
         popupRef.current=new maplibre.Popup({closeOnClick:false,maxWidth:'290px'}).setLngLat(event.lngLat).setDOMContent(node).addTo(map);
       });
-      map.on('mousemove',event=>{if(!map?.getLayer('tract-hit-area'))return;const enabled=displayRef.current.mode!=='off';map.getCanvas().style.cursor=enabled&&map.queryRenderedFeatures(event.point,{layers:['tract-hit-area']}).length?'pointer':'';});
+      map.on('mousemove',event=>{if(!map)return;const layers=displayRef.current.foundations?['foundation-risk']:displayRef.current.mode!=='off'?['tract-hit-area']:[];const available=layers.filter(id=>map?.getLayer(id));map.getCanvas().style.cursor=available.length&&map.queryRenderedFeatures(event.point,{layers:available}).length?'pointer':'';});
       const activeMap = map;
       controls.current = {
         tilt:()=>activeMap.setPitch(activeMap.getPitch()>5?0:50),
@@ -100,12 +105,13 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
 }
 
 function applyDisplay(map:maplibre.Map,display:DisplayOptions){
+  applyPlanningLayers(map,display);
   applyAnalysisLayers(map,{mode:display.mode});
   const detail=display.preset==='detailed';
   const visibility:Record<string,boolean>={
     'labels-places':display.preset!=='clean','labels-roads-major':display.preset!=='clean',
-    'labels-neighborhoods':detail,'labels-roads-minor':detail,'labels-poi':detail,
-    'paths':detail,'existing-rail':detail,'buildings-3d':display.buildings,'building-footprints':!display.buildings
+    'labels-neighborhoods':detail,'labels-poi':detail,
+    'paths':detail,'buildings-3d':display.buildings&&!display.foundations,'building-footprints':!display.buildings&&!display.foundations
   };
   for(const [id,visible] of Object.entries(visibility))if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
 }
