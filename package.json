@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
-    "test": "tsx --test src/simulation/core.test.ts src/components/camera.test.ts server/quickSave.test.ts src/components/analysisLayers.test.ts src/components/underground.test.ts src/components/stationPlacement.test.ts src/components/trackPlacement.test.ts",
-    "test:construction": "node --import tsx --test --test-reporter=dot src/components/stationPlacement.test.ts src/components/trackPlacement.test.ts server/quickSave.test.ts",
-    "preview": "vite preview --host 127.0.0.1"
+    "test": "tsx --test src/simulation/core.test.ts src/components/camera.test.ts server/quickSave.test.ts src/components/analysisLayers.test.ts src/components/underground.test.ts src/components/stationPlacement.test.ts src/components/trackPlacement.test.ts src/components/constructionWorkflow.test.ts server/namedSaves.test.ts src/components/buildingSupports.test.ts src/components/railPaths.test.ts",
+    "test:construction": "node --import tsx --test --test-reporter=dot src/components/stationPlacement.test.ts src/components/trackPlacement.test.ts src/components/constructionWorkflow.test.ts server/quickSave.test.ts",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:saves": "node --import tsx --test --test-reporter=dot server/quickSave.test.ts server/namedSaves.test.ts"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

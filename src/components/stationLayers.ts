@@ -1,6 +1,6 @@
 import type { Map, GeoJSONSource, ExpressionSpecification } from 'maplibre-gl';
 import { stationFeatures, type PlacedStation } from './stationPlacement';
-import { metroLineWidth } from './metroPreview';
+import { metroLineWidth } from './metroStyle';
 export const STATION_SOURCE='player-stations',GHOST_SOURCE='station-cursor';
 export const STATION_HIT_LAYERS=['player-station-fill','player-station-platform-fill','player-station-outline','player-station-platform-edge','player-station-tracks','player-station-dot','player-station-label'];
 export function installStationLayers(map:Map){
@@ -14,8 +14,9 @@ export function installStationLayers(map:Map){
    map.addLayer({id:`${prefix}-blueprint-outline`,type:'line',source,filter:['all',match('envelope'),['!=',['get','stage'],'constructed']],paint:{'line-color':color,'line-width':['case',['get','selected'],2.2,1.2],'line-dasharray':[3,2]}});
    map.addLayer({id:`${prefix}-platform-edge`,type:'line',source,filter:match('platform'),paint:{'line-color':color,'line-width':1.2}});
    map.addLayer({id:`${prefix}-tracks`,type:'line',source,filter:match('track'),layout:{'line-cap':'round'},paint:{'line-color':color,'line-width':metroLineWidth(1.4,1.2)}});
+   map.addLayer({id:`${prefix}-direction`,type:'symbol',source,minzoom:15,filter:match('direction'),layout:{'symbol-placement':'line-center','icon-image':'track-direction','icon-size':.7,'icon-rotation-alignment':'map','icon-pitch-alignment':'map','icon-keep-upright':false,'icon-padding':1},paint:{'icon-opacity':.9}});
    map.addLayer({id:`${prefix}-dot`,type:'circle',source,filter:match('label'),paint:{'circle-radius':3,'circle-color':'#fafbf3','circle-stroke-color':color,'circle-stroke-width':1.4}});
-   map.addLayer({id:`${prefix}-label`,type:'symbol',source,filter:match('label'),layout:{'text-field':['concat',['get','name'],'\n',['get','depth']],'text-font':['Noto Sans Regular'],'text-size':11,'text-anchor':'bottom','text-offset':[0,-.8],'text-allow-overlap':true,'text-pitch-alignment':'viewport'},paint:{'text-color':color,'text-halo-color':'#fafbf3','text-halo-width':2}});
+   map.addLayer({id:`${prefix}-label`,type:'symbol',source,filter:match('label'),layout:{'text-field':['get','label'],'text-font':['Noto Sans Regular'],'text-size':11,'text-anchor':'bottom','text-offset':[0,-.8],'text-allow-overlap':true,'text-pitch-alignment':'viewport'},paint:{'text-color':color,'text-halo-color':'#fafbf3','text-halo-width':2}});
  }
 }
 export function updateStations(map:Map,stations:PlacedStation[],selected:string|null){(map.getSource(STATION_SOURCE) as GeoJSONSource|undefined)?.setData(stationFeatures(stations,selected));}

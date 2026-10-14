@@ -7,15 +7,15 @@ export function cameraDelta(pitch:number,bearing:number,dx:number,dy:number){
 export function buildingTileZoom(centerZoom:number){return Math.min(14,Math.max(13,Math.floor(centerZoom)));}
 // Retain local rail detail across the pitched viewport instead of dropping tunnel segments in coarse horizon tiles.
 export function railTileZoom(){return 14;}
-export function attachCameraGesture(map:Map){
+export function attachCameraGesture(map:Map,onRightClick?:()=>void){
   const canvas=map.getCanvas();
-  let drag:{id:number;x:number;y:number;startX:number;startY:number;started:boolean}|null=null;
+  let drag:{id:number;x:number;y:number;startX:number;startY:number;started:boolean;right:boolean}|null=null;
   let dx=0,dy=0,frame=0;
   const flush=()=>{frame=0;if(!drag||!drag.started)return;const next=cameraDelta(map.getPitch(),map.getBearing(),dx,dy);dx=0;dy=0;map.jumpTo(next);};
   const down=(e:PointerEvent)=>{
     if(e.pointerType!=='mouse'||!(e.button===2||(e.button===0&&e.ctrlKey)))return;
     e.preventDefault();e.stopPropagation();map.stop();
-    drag={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,started:false};
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,started:false,right:e.button===2};
     canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';
   };
   const move=(e:PointerEvent)=>{
@@ -25,7 +25,7 @@ export function attachCameraGesture(map:Map){
     dx+=e.clientX-drag.x;dy+=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;
     if(!frame)frame=requestAnimationFrame(flush);
   };
-  const end=()=>{if(frame){cancelAnimationFrame(frame);flush();}if(drag&&canvas.hasPointerCapture(drag.id))canvas.releasePointerCapture(drag.id);drag=null;dx=0;dy=0;canvas.style.cursor='';};
+  const end=(event?:Event)=>{const click=event?.type==='pointerup'&&drag?.right&&!drag.started;if(frame){cancelAnimationFrame(frame);flush();}if(drag&&canvas.hasPointerCapture(drag.id))canvas.releasePointerCapture(drag.id);drag=null;dx=0;dy=0;canvas.style.cursor='';if(click)onRightClick?.();};
   const context=(e:MouseEvent)=>e.preventDefault();
   canvas.addEventListener('pointerdown',down,true);canvas.addEventListener('pointermove',move,true);
   canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);canvas.addEventListener('lostpointercapture',end);canvas.addEventListener('contextmenu',context);window.addEventListener('blur',end);

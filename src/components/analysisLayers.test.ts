@@ -28,7 +28,7 @@ test('analysis modes include boundaries and switch between population and job de
  const map={getLayer:()=>true,setLayoutProperty:(id:string,_key:string,value:string)=>{visibility[id]=value;},setPaintProperty:(id:string,key:string,value:unknown)=>{paint[`${id}.${key}`]=value;}};
  applyAnalysisLayers(map as never,{mode:'population'});assert.equal(visibility['population-density'],'visible');assert.equal(visibility['borough-boundaries'],'visible');assert.equal(paint['buildings-3d.fill-extrusion-opacity'],.18);const populationPaint=paint['population-density.fill-color'];
  applyAnalysisLayers(map as never,{mode:'jobs'});assert.equal(visibility['borough-boundaries'],'visible');assert.notDeepEqual(paint['population-density.fill-color'],populationPaint);
- applyAnalysisLayers(map as never,{mode:'off'});assert.equal(visibility['tract-hit-area'],'none');assert.equal(visibility['borough-boundaries'],'none');assert.equal(paint['buildings-3d.fill-extrusion-opacity'],.85);
+ applyAnalysisLayers(map as never,{mode:'off'});assert.equal(visibility['tract-hit-area'],'none');assert.equal(visibility['borough-boundaries'],'none');assert.equal(paint['buildings-3d.fill-extrusion-opacity'],1);
 });
 test('packaged workplace counts join every tract and preserve LODES job totals and densities',()=>{
  const data=JSON.parse(readFileSync(new URL('../../public/data/nyc-population-2020.geojson',import.meta.url),'utf8'));

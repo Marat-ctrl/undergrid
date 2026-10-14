@@ -1,4 +1,5 @@
-import { normalizeAnalysis } from '../src/components/analysisLayers';
+import { normalizeSave } from './saveData';
+import { namedSavesHandler } from './namedSaves';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -24,7 +25,7 @@ export function quickSaveHandler(root:string){
       let body='';for await(const chunk of req){body+=chunk.toString();if(Buffer.byteLength(body)>65536){send(413,{error:'Save is too large.'});return;}}
       let save:unknown;try{save=JSON.parse(body);}catch{send(400,{error:'Invalid JSON.'});return;}
       if(!isQuickSave(save)){send(400,{error:'Invalid quick save.'});return;}
-      const clean={version:save.version,city:save.city,active:save.active,updatedAt:save.updatedAt,camera:{...save.camera},preset:save.preset,...(save.tracks?{tracks:save.tracks.map(track=>({id:track.id,mode:track.mode,stage:track.stage,start:{...track.start},end:{...track.end}}))}:{}),...(save.stations?{stations:save.stations.map(station=>({id:station.id,name:station.name,start:[...station.start],end:[...station.end],depth:station.depth,layout:station.layout,stage:station.stage}))}:{}),...(save.underground?{underground:{...save.underground}}:{}),...(save.planning?{planning:{...save.planning}}:{}),...(save.analysis?{analysis:normalizeAnalysis(save.analysis)}:{})};
+      const clean=normalizeSave(save);
       const write=writes.then(async()=>{try{const current=JSON.parse(await readFile(file,'utf8'));if(isQuickSave(current)&&current.updatedAt>clean.updatedAt)return;}catch{}await mkdir(folder,{recursive:true});const tmp=join(folder,'quick-save.tmp');await writeFile(tmp,JSON.stringify(clean,null,2)+'\n','utf8');await rename(tmp,file);});
       writes=write.catch(()=>{});await write;send(200,{saved:true});
     }catch{send(500,{error:'Quick save could not be written.'});}
@@ -32,5 +33,5 @@ export function quickSaveHandler(root:string){
 }
 export function quickSavePlugin():Plugin {
   let root='';
-  return {name:'undergrid-local-save',configResolved:config=>{root=config.root;},configureServer:server=>{server.middlewares.use(quickSaveHandler(root));},configurePreviewServer:server=>{server.middlewares.use(quickSaveHandler(root));}};
+  return {name:'undergrid-local-save',configResolved:config=>{root=config.root;},configureServer:server=>{server.middlewares.use(quickSaveHandler(root));server.middlewares.use(namedSavesHandler(root));},configurePreviewServer:server=>{server.middlewares.use(quickSaveHandler(root));server.middlewares.use(namedSavesHandler(root));}};
 }

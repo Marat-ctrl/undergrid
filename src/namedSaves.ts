@@ -1,0 +1,12 @@
+import { isQuickSave,type QuickSave } from './gameSave';
+export interface SaveSummary {id:string;name:string;createdAt:number;city:'new-york';stations:number;tracks:number;}
+export interface NamedSave {version:1;id:string;name:string;createdAt:number;game:QuickSave;}
+export const SAVE_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export function validSaveName(value:unknown):value is string{return typeof value==='string'&&value.trim().length>0&&value.trim().length<=60&&!/[\u0000-\u001f\u007f]/.test(value);}
+export function isNamedSave(value:unknown):value is NamedSave {if(!value||typeof value!=='object')return false;const s=value as NamedSave;return s.version===1&&typeof s.id==='string'&&SAVE_ID.test(s.id)&&validSaveName(s.name)&&Number.isFinite(s.createdAt)&&s.createdAt>=0&&isQuickSave(s.game);}
+export function saveSummary(save:NamedSave):SaveSummary{return {id:save.id,name:save.name,createdAt:save.createdAt,city:save.game.city,stations:save.game.stations?.length??0,tracks:save.game.tracks?.length??0};}
+function isSummary(value:unknown):value is SaveSummary {if(!value||typeof value!=='object')return false;const s=value as SaveSummary;return typeof s.id==='string'&&SAVE_ID.test(s.id)&&validSaveName(s.name)&&Number.isFinite(s.createdAt)&&s.createdAt>=0&&s.city==='new-york'&&Number.isInteger(s.stations)&&s.stations>=0&&Number.isInteger(s.tracks)&&s.tracks>=0;}
+async function responseJson(response:Response){const body:unknown=await response.json();if(!response.ok)throw new Error(body&&typeof body==='object'&&'error' in body&&typeof body.error==='string'?body.error:'Save request failed.');return body;}
+export async function listNamedSaves(){const body=await responseJson(await fetch('/api/saves',{cache:'no-store'}));if(!Array.isArray(body)||!body.every(isSummary))throw new Error('Save list is incompatible.');return body;}
+export async function readNamedSave(id:string){if(!SAVE_ID.test(id))throw new Error('Invalid save.');const body=await responseJson(await fetch(`/api/saves/${id}`,{cache:'no-store'}));if(!isNamedSave(body))throw new Error('Save is incompatible.');return body;}
+export async function createNamedSave(name:string,game:QuickSave){const body=await responseJson(await fetch('/api/saves',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,game})}));if(!isSummary(body))throw new Error('Save response is incompatible.');return body;}
