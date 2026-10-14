@@ -4,8 +4,6 @@
 
 Undergrid is an early-alpha metro planning game for the browser. Explore New York on a real OpenStreetMap basemap, study where people live and work, and plan a metro network with parallel tracks, station platforms, depots and physical rail depths.
 
-![Player-built stations, paired rails and depot yards at physical elevations](docs/screenshots/network-construction.png)
-
 ## Current features
 
 - New York City and its surroundings, with a full-window map and a minimal interface.
@@ -43,7 +41,7 @@ Undergrid is an early-alpha metro planning game for the browser. Explore New Yor
   <img src="docs/screenshots/credits.png" alt="Open data credits" width="60%" />
 </p>
 
-The opening screenshot shows the current construction renderer. The menu and map-layer gallery shows earlier alpha milestones; the fictional visual preview has since been removed. Map data: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), [OpenMapTiles](https://openmaptiles.org/) and [OpenFreeMap](https://openfreemap.org/). Density layers use U.S. Census Bureau and NYC Department of City Planning data; the in-game Credits screen and [development notes](docs/development.md) describe the sources.
+The menu and map-layer gallery shows earlier alpha milestones; the fictional visual preview has since been removed. Map data: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), [OpenMapTiles](https://openmaptiles.org/) and [OpenFreeMap](https://openfreemap.org/). Density layers use U.S. Census Bureau and NYC Department of City Planning data; the in-game Credits screen and [development notes](docs/development.md) describe the sources.
 
 ## Run locally
 
