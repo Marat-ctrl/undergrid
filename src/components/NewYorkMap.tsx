@@ -1,3 +1,6 @@
+import { missingBuildingSupports } from './buildingSupports';
+import type { Feature, Polygon, MultiPolygon } from 'geojson';
+import { installMetroPreview, setMetroPreviewVisible, METRO_PREVIEW_CENTER } from './metroPreview';
 import { applyPlanningLayers, foundationRange, foundationRisk } from './underground';
 import { useEffect, useRef } from 'react';
 import * as maplibre from 'maplibre-gl';
@@ -11,8 +14,8 @@ import { createMapStyle, type DisplayOptions } from './mapStyle';
 maplibre.setWorkerUrl(mapWorkerUrl);
 export const NEW_YORK_BOUNDS: maplibre.LngLatBoundsLike = [[-74.32, 40.47], [-73.65, 40.98]];
 export type MapStatus = 'loading' | 'ready' | 'error';
-export interface MapControls { north: () => void; tilt:()=>void; }
-export default function NewYorkMap({ onStatus, controls, display, initialCamera, onCamera, onAnalysis, analysisRetry }: {
+export interface MapControls { north: () => void; tilt:()=>void;preview:()=>void; }
+export default function NewYorkMap({ onStatus, controls, display, initialCamera, onCamera, onAnalysis, analysisRetry, previewVisible }: {
   onStatus: (status: MapStatus) => void;
   controls: React.RefObject<MapControls | null>;
   display: DisplayOptions;
@@ -20,7 +23,9 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
   onCamera:(camera:SavedCamera)=>void;
   onAnalysis:(status:AnalysisStatus)=>void;
   analysisRetry:number;
+  previewVisible:boolean;
 }) {
+  const previewRef=useRef(previewVisible);previewRef.current=previewVisible;
   const container = useRef<HTMLDivElement>(null);
   const instance=useRef<maplibre.Map|null>(null);
   const popupRef=useRef<maplibre.Popup|null>(null);
@@ -35,6 +40,7 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
     let active = true;
     const analysisAbort=new AbortController();
     let analysisLoading=false;
+    let supportSignature='';
     callbacks.current.onAnalysis('idle');
     let removeGesture:(()=>void)|undefined;
     callbacks.current.onStatus('loading');
@@ -57,10 +63,15 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
         if(analysisLoading)return;analysisLoading=true;callbacks.current.onAnalysis('loading');
         void loadAnalysisData(analysisAbort.signal).then(data=>{if(!active)return;installAnalysisLayers(map!,data);applyDisplay(map!,displayRef.current);callbacks.current.onAnalysis('ready');}).catch(()=>{if(active)callbacks.current.onAnalysis('error');}).finally(()=>{analysisLoading=false;});
       };
-      map.on('style.load',()=>{if(!active)return;const buildings=map!.getSource('building-tiles');if(buildings)buildings.calculateTileZoom=buildingTileZoom;const rail=map!.getSource('rail-tiles');if(rail){rail.tileSize=128;rail.calculateTileZoom=railTileZoom;}applyDisplay(map!,displayRef.current);ensureAnalysis.current();});
+      map.on('style.load',()=>{if(!active)return;const buildings=map!.getSource('building-tiles');if(buildings)buildings.calculateTileZoom=buildingTileZoom;const rail=map!.getSource('rail-tiles');if(rail){rail.tileSize=128;rail.calculateTileZoom=railTileZoom;}applyDisplay(map!,displayRef.current);installMetroPreview(map!);setMetroPreviewVisible(map!,previewRef.current);ensureAnalysis.current();});
       removeGesture=attachCameraGesture(map);
       map.on('error', (event) => { if (!active) return;const sourceId=(event as typeof event & {sourceId?:string}).sourceId;if(sourceId&&ANALYSIS_SOURCE_IDS.includes(sourceId)){callbacks.current.onAnalysis('error');return;}failed = true; callbacks.current.onStatus('error'); });
       map.on('idle', () => {
+        if(active&&map?.isSourceLoaded('building-tiles')){
+          const buildings=map.querySourceFeatures('building-tiles',{'sourceLayer':'building'}).filter(feature=>feature.geometry.type==='Polygon'||feature.geometry.type==='MultiPolygon') as Feature<Polygon|MultiPolygon>[];
+          const data=missingBuildingSupports(buildings),signature=JSON.stringify(data);
+          if(signature!==supportSignature){supportSignature=signature;(map.getSource('building-supports') as maplibre.GeoJSONSource)?.setData(data);}
+        }
         if (active && !failed && map?.isSourceLoaded('openmaptiles')) {
           ready = true; clearTimeout(timer); callbacks.current.onStatus('ready');
         }
@@ -92,6 +103,7 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
       map.on('mousemove',event=>{if(!map)return;const layers=displayRef.current.foundations?['foundation-risk']:displayRef.current.mode!=='off'?['tract-hit-area']:[];const available=layers.filter(id=>map?.getLayer(id));map.getCanvas().style.cursor=available.length&&map.queryRenderedFeatures(event.point,{layers:available}).length?'pointer':'';});
       const activeMap = map;
       controls.current = {
+        preview:()=>activeMap.easeTo({center:METRO_PREVIEW_CENTER,zoom:16.7,pitch:35,bearing:-15,duration:600}),
         tilt:()=>activeMap.setPitch(activeMap.getPitch()>5?0:50),
         north: () => activeMap.easeTo({ bearing: 0, duration: 350 })
       };
@@ -101,17 +113,22 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
     return () => { active = false;analysisAbort.abort();popupRef.current?.remove();ensureAnalysis.current=()=>{}; removeGesture?.(); clearTimeout(timer); observer.disconnect(); controls.current = null; instance.current=null; map?.remove(); };
   }, [controls,initialCamera]);
   useEffect(()=>{const map=instance.current;if(map?.getLayer('background')){applyDisplay(map,display);ensureAnalysis.current();popupRef.current?.remove();if(display.mode==='off')map.getCanvas().style.cursor='';}},[display,analysisRetry]);
+  useEffect(()=>{if(instance.current?.getSource('metro-preview'))setMetroPreviewVisible(instance.current,previewVisible);},[previewVisible]);
   return <div ref={container} className="ny-map" aria-label="New York OpenStreetMap world" />;
 }
 
 function applyDisplay(map:maplibre.Map,display:DisplayOptions){
   applyPlanningLayers(map,display);
   applyAnalysisLayers(map,{mode:display.mode});
+  map.setPaintProperty('background','background-color','#f0f0e8');
+  for(const id of ['wood','parks','water'])map.setPaintProperty(id,'fill-opacity',id==='wood'?.7:id==='parks'?.8:1);
+  for(const id of ['roads-major','roads-minor','waterways','paths'])map.setPaintProperty(id,'line-opacity',1);
+  map.setPaintProperty('building-footprints','fill-opacity',.8);
   const detail=display.preset==='detailed';
   const visibility:Record<string,boolean>={
     'labels-places':display.preset!=='clean','labels-roads-major':display.preset!=='clean',
     'labels-neighborhoods':detail,'labels-poi':detail,
-    'paths':detail,'buildings-3d':display.buildings&&!display.foundations,'building-footprints':!display.buildings&&!display.foundations
+    'paths':detail,'building-supports-3d':display.buildings&&!display.foundations,'buildings-3d':display.buildings&&!display.foundations,'building-footprints':!display.buildings&&!display.foundations
   };
   for(const [id,visible] of Object.entries(visibility))if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
 }

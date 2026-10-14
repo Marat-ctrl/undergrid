@@ -63,6 +63,7 @@ export function applyAnalysisLayers(map:Map,layers:AnalysisLayers){
  const enabled=layers.mode!=='off';
  for(const id of ['tract-hit-area','population-density','tract-boundaries','borough-boundaries','borough-labels'])if(map.getLayer(id))map.setLayoutProperty(id,'visibility',enabled?'visible':'none');
  if(map.getLayer('population-density'))map.setPaintProperty('population-density','fill-color',densityExpression(layers.mode));
+ if(map.getLayer('building-supports-3d'))map.setPaintProperty('building-supports-3d','fill-extrusion-opacity',enabled ? .18 : .85);
  if(map.getLayer('buildings-3d'))map.setPaintProperty('buildings-3d','fill-extrusion-opacity',enabled ? .18 : .85);
  if(map.getLayer('building-footprints'))map.setPaintProperty('building-footprints','fill-opacity',enabled ? .18 : .8);
 }

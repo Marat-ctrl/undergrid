@@ -1,3 +1,4 @@
+import { DEFAULT_UNDERGROUND } from './components/undergroundView';
 import { DEFAULT_PLANNING } from './components/underground';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Box, Check, ChevronRight, Compass, Copyright, HelpCircle, LoaderCircle, Menu, RotateCcw, X } from 'lucide-react';
@@ -25,8 +26,9 @@ function CityArtwork() {
   </svg>;
 }
 export default function App() {
-  const [display,setDisplay]=useState<DisplayOptions>({preset:'clean',buildings:false,...DEFAULT_ANALYSIS,...DEFAULT_PLANNING});
+  const [display,setDisplay]=useState<DisplayOptions>({preset:'clean',buildings:false,...DEFAULT_ANALYSIS,...DEFAULT_PLANNING,underground:false,viewDepth:25});
   const [screen, setScreen] = useState<Screen>('boot');
+  const [previewVisible,setPreviewVisible]=useState(true);
   const [layersOpen,setLayersOpen]=useState(false);
   const [analysisStatus,setAnalysisStatus]=useState<AnalysisStatus>('idle');
   const [analysisRetry,setAnalysisRetry]=useState(0);
@@ -46,12 +48,12 @@ export default function App() {
   useEffect(()=>{
     const writer=createQuickSaver(()=>setSaveError('Quick save could not be written.'),()=>setHasSave(true));saver.current=writer;
     let alive=true;
-    void readQuickSave().then(save=>{if(!alive)return;if(save){setHasSave(true);camera.current=save.camera;setInitialCamera(save.camera);setDisplay({preset:save.preset,buildings:save.preset==='detailed',...normalizeAnalysis(save.analysis),...(save.planning??DEFAULT_PLANNING)});activeWorld.current=save.active;setScreen(save.active?'loading':'home');}else setScreen('home');}).catch(()=>{if(alive){setSaveError('Quick save could not be loaded. Start a new world to replace it.');setScreen('home');}});
+    void readQuickSave().then(save=>{if(!alive)return;if(save){setHasSave(true);camera.current=save.camera;setInitialCamera(save.camera);setDisplay({preset:save.preset,buildings:save.preset==='detailed',...normalizeAnalysis(save.analysis),...(save.planning??DEFAULT_PLANNING),underground:false,viewDepth:save.underground?.depth??DEFAULT_UNDERGROUND.depth});activeWorld.current=save.active;setScreen(save.active?'loading':'home');}else setScreen('home');}).catch(()=>{if(alive){setSaveError('Quick save could not be loaded. Start a new world to replace it.');setScreen('home');}});
     const flush=()=>writer.flush(true);const hidden=()=>{if(document.visibilityState==='hidden')flush();};
     window.addEventListener('pagehide',flush);document.addEventListener('visibilitychange',hidden);
     return()=>{alive=false;window.removeEventListener('pagehide',flush);document.removeEventListener('visibilitychange',hidden);writer.dispose();saver.current=null;};
   },[]);
-  function persist(immediate=false){const save:QuickSave={version:1,city:'new-york',active:activeWorld.current,updatedAt:Date.now(),camera:{...camera.current},preset:displayRef.current.preset,analysis:{mode:displayRef.current.mode},planning:{existingRail:displayRef.current.existingRail,foundations:displayRef.current.foundations,plannedDepth:displayRef.current.plannedDepth}};saver.current?.save(save,immediate);}
+  function persist(immediate=false){const save:QuickSave={version:1,city:'new-york',active:activeWorld.current,updatedAt:Date.now(),camera:{...camera.current},preset:displayRef.current.preset,analysis:{mode:displayRef.current.mode},underground:{enabled:displayRef.current.underground,depth:displayRef.current.viewDepth},planning:{existingRail:displayRef.current.existingRail,foundations:displayRef.current.foundations,plannedDepth:displayRef.current.plannedDepth}};saver.current?.save(save,immediate);}
   useEffect(()=>{if(activeWorld.current)persist();},[display]);
   function cameraChanged(next:SavedCamera){camera.current=next;if(activeWorld.current)persist();}
   function exitWorld(next:'home'|'cities'){setLayersOpen(false);activeWorld.current=false;persist(true);setPausedMenu(false);setStatus('loading');setScreen(next);}
@@ -71,7 +73,7 @@ export default function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [screen, help, layersOpen, credits]);
-  function start() { const nextDisplay={...displayRef.current,...DEFAULT_ANALYSIS,...DEFAULT_PLANNING};displayRef.current=nextDisplay;setDisplay(nextDisplay);setLayersOpen(false);camera.current={...DEFAULT_CAMERA};setInitialCamera(camera.current);activeWorld.current=true;setSaveError('');persist(true);setStatus('loading');setAttempt(value=>value+1);setScreen('loading'); }
+  function start() { const nextDisplay={...displayRef.current,...DEFAULT_ANALYSIS,...DEFAULT_PLANNING,underground:false,viewDepth:25};displayRef.current=nextDisplay;setDisplay(nextDisplay);setLayersOpen(false);camera.current={...DEFAULT_CAMERA};setInitialCamera(camera.current);activeWorld.current=true;setSaveError('');persist(true);setStatus('loading');setAttempt(value=>value+1);setScreen('loading'); }
   function retryWorld(){setInitialCamera({...camera.current});setStatus('loading');setAttempt(value=>value+1);setScreen('loading');}
   async function continueGame(){
     setResuming(true);setSaveError('');
@@ -79,7 +81,7 @@ export default function App() {
       await saver.current?.wait();const save=await readQuickSave();
       if(!save){setHasSave(false);setSaveError('No quick save is available.');return;}
       camera.current=save.camera;setInitialCamera({...save.camera});
-      const restoredDisplay:DisplayOptions={preset:save.preset,buildings:save.preset==='detailed',...normalizeAnalysis(save.analysis),...(save.planning??DEFAULT_PLANNING)};
+      const restoredDisplay:DisplayOptions={preset:save.preset,buildings:save.preset==='detailed',...normalizeAnalysis(save.analysis),...(save.planning??DEFAULT_PLANNING),underground:false,viewDepth:save.underground?.depth??DEFAULT_UNDERGROUND.depth};
       displayRef.current=restoredDisplay;setDisplay(restoredDisplay);activeWorld.current=true;persist(true);
       setStatus('loading');setAttempt(value=>value+1);setScreen('loading');
     }catch{setHasSave(false);setSaveError('Quick save could not be loaded. Start a new world to replace it.');}
@@ -90,7 +92,7 @@ export default function App() {
   return <main className="game">
     {screen==='boot'&&<div className="loading-screen"><div className="loading-content"><LoaderCircle className="spinner" size={23}/><small>Restoring quick save</small></div></div>}
     {saveError&&<div className="save-error" role="alert">{saveError}<button onClick={()=>setSaveError('')} aria-label="Dismiss save message"><X size={14}/></button></div>}
-    {worldMounted && <Suspense fallback={null}><NewYorkMap key={attempt} onStatus={mapStatus} controls={controls} display={display} initialCamera={initialCamera} onCamera={cameraChanged} onAnalysis={setAnalysisStatus} analysisRetry={analysisRetry}/></Suspense>}
+    {worldMounted && <Suspense fallback={null}><NewYorkMap key={attempt} onStatus={mapStatus} controls={controls} display={display} initialCamera={initialCamera} onCamera={cameraChanged} onAnalysis={setAnalysisStatus} analysisRetry={analysisRetry} previewVisible={previewVisible}/></Suspense>}
     {(screen === 'home' || screen === 'cities') && <div className="title-screen">
       <div className="title-art"><CityArtwork/><span className="art-label">A CITY WAITING TO CONNECT.</span></div>
       <div className="title-panel"><div className="wordmark">undergrid<span className="logo-dot"/></div><p className="tagline">Build the city beneath the city.</p>
@@ -106,10 +108,11 @@ export default function App() {
     {screen === 'loading' && <div className="loading-screen"><div className="loading-content"><span className="loading-city">NEW YORK</span><h1>{status === 'error' ? 'The city is out of reach.' : 'Loading your world.'}</h1><p>{status === 'error' ? 'Map tiles could not be loaded. Check your internet connection and try again.' : 'Connecting streets, neighborhoods and possibilities.'}</p>{status === 'error' ? <div className="loading-actions"><button className="menu-primary" onClick={retryWorld}><RotateCcw size={16}/> Try again</button><button onClick={() => exitWorld('cities')}>Back to cities</button></div> : <><LoaderCircle size={23} className="spinner"/><small>Preparing city map</small><button className="loading-cancel" onClick={() => exitWorld('cities')}>Cancel</button></>}</div></div>}
     {screen === 'world' && <>
       <header className="world-header"><button className="world-menu-button" onClick={() => setPausedMenu(true)} aria-label="Open menu"><Menu size={15}/></button><span className="world-city">New York</span></header>
-      <div className="world-tools" aria-label="Map controls"><div className="display-presets" aria-label="Map detail">{(['clean','detailed'] as DisplayPreset[]).map(preset=><button key={preset} className={display.preset===preset?'selected':''} aria-pressed={display.preset===preset} onClick={()=>setDisplay(current=>({...current,preset,buildings:preset==='detailed'}))}>{preset.charAt(0).toUpperCase()+preset.slice(1)}</button>)}</div><MapLayersMenu display={display} open={layersOpen} onOpenChange={setLayersOpen} onChange={mode=>setDisplay(current=>({...current,mode,foundations:mode!=='off'?false:current.foundations}))} onPlanning={patch=>setDisplay(current=>({...current,...patch,mode:patch.foundations?'off':current.mode}))}/><button className="world-tool" onClick={()=>controls.current?.tilt()} aria-label="Toggle tilted view" title="Toggle tilted view"><Box size={16}/></button><button className="world-tool" onClick={()=>controls.current?.north()} aria-label="Face north" title="Face north"><Compass size={16}/></button></div>
+      <div className="world-tools" aria-label="Map controls"><div className="display-presets" aria-label="Map detail">{(['clean','detailed'] as DisplayPreset[]).map(preset=><button key={preset} className={display.preset===preset?'selected':''} aria-pressed={display.preset===preset} onClick={()=>setDisplay(current=>({...current,preset,buildings:preset==='detailed'}))}>{preset.charAt(0).toUpperCase()+preset.slice(1)}</button>)}</div><MapLayersMenu previewVisible={previewVisible} onPreviewChange={setPreviewVisible} onPreviewFocus={()=>{setLayersOpen(false);controls.current?.preview();}} display={display} open={layersOpen} onOpenChange={setLayersOpen} onChange={mode=>setDisplay(current=>({...current,underground:false,mode,foundations:mode!=='off'?false:current.foundations}))} onPlanning={patch=>setDisplay(current=>({...current,underground:patch.foundations?false:current.underground,...patch,mode:patch.foundations?'off':current.mode}))}/><button className="world-tool" onClick={()=>controls.current?.tilt()} aria-label="Toggle tilted view" title="Toggle tilted view"><Box size={16}/></button><button className="world-tool" onClick={()=>controls.current?.north()} aria-label="Face north" title="Face north"><Compass size={16}/></button></div>
       <AnalysisLegend display={display} status={analysisStatus} onRetry={()=>setAnalysisRetry(value=>value+1)}/>
 
-      {status === 'error' && <div className="map-error" role="alert">Some map tiles could not be loaded.<button onClick={retryWorld}>Retry <RotateCcw size={13}/></button></div>}
+
+      {status === 'error'  && <div className="map-error" role="alert">Some map tiles could not be loaded.<button onClick={retryWorld}>Retry <RotateCcw size={13}/></button></div>}
     </>}
     {credits&&<Credits onClose={()=>setCredits(false)}/>}
     {(pausedMenu || help) && <div className="dialog-shade"><section className="dialog" role="dialog" aria-modal="true" aria-label={help ? 'How to play' : 'Game menu'}><button className="close-dialog" onClick={() => { setHelp(false); setPausedMenu(false); }} aria-label="Close menu"><X size={19}/></button><span className="dialog-eyebrow">UNDERGRID</span><h2>{help ? 'Explore your first world.' : 'New York'}</h2>{help ? <><p>Choose New Game, select New York and start your world.</p><p>Drag to move around the city. Scroll to zoom. Right-drag or Ctrl + drag to rotate and tilt. Choose Clean or Detailed at the top right. Detailed includes 3D buildings. Use Map layers to choose Population (2020 Census) or Jobs (2023 LODES). Each mode includes district boundaries. Click an area to inspect its density. The cube toggles tilt; the compass faces north without changing your location or zoom. Press Escape to open the menu.</p><p className="help-note">This milestone includes the main menu and the New York map. Construction and simulation tools will return in a later stage. Map loading requires an internet connection.</p><button className="menu-primary" onClick={() => setHelp(false)}>Got it <ChevronRight size={17}/></button></> : <nav className="pause-menu"><button className="menu-primary" onClick={() => setPausedMenu(false)}>Resume <ArrowRight size={18}/></button><button onClick={() => {setPausedMenu(false);setHelp(true);}}>Controls <HelpCircle size={16}/></button><button onClick={leave}>Main menu <ArrowLeft size={16}/></button></nav>}</section></div>}

@@ -71,3 +71,33 @@ Foundation footprints use an explicit gameplay proxy, not observed foundation de
 Foundation mode shows flat footprints and switches density off to keep its colors readable. Rail can accompany any analysis map. Settings persist in local quicksave and older saves remain supported.
 
 Rail uses a separate vector source with tile detail held at zoom 14 across the pitched viewport to retain distant mapped tunnel and local rail segments. A 128 px source tile size also preserves more detail at lower pitches; rail widths compensate for that scale. This can request more tiles than the adaptive basemap.
+
+### Underground cutaway prototype
+
+The **Underground** button beside the cube switches to a translucent surface reference and hides above-ground 3D buildings. **View demo** moves the camera to a fictional station near City Hall, with rails, platforms and an open roof. A single shared two-track bore on each side narrows smoothly from the station over a 100 m approach; tracks remain independent and do not form a turnout. Four small entrances and a clickable Demo station marker remain visible on the surface. This demo is not existing infrastructure and is not a constructed asset in the quicksave. The dashed outline lies at ground 0 m; a vertical reference connects it to the rail level. The depth control (5–100 m below ground) moves the demonstration, rather than filtering existing infrastructure.
+
+A Three.js custom MapLibre layer shares the map WebGL context and projection matrix. Local metre coordinates map to Mercator coordinates; negative Z is below a uniform ground datum. The cutaway deliberately renders through the surface and does not model soil, terrain or collision clearance. Underground mode/depth and map camera persist locally; legacy saves default to surface mode. Population/jobs and estimated foundations are temporarily hidden during the cutaway; choosing an analysis layer returns to the surface.
+
+The demo now reads a separate station descriptor with track/platform relationships and independently positioned/rotated entrances. Stair openings face opposite station ends. See [station research and adaptation](docs/station-design.md) for the documented Subway Builder concepts and the limits of the comparison.
+
+### Depth datum and Blender assets
+
+Underground view depth is now measured from uniform ground Z=0 to the rail-head datum. The legacy procedural mesh used rail Z=-2.5 relative to its origin: it is now translated by `2.5 - depth`, making the displayed 100 m depth correspond to rail datum Z=-100 rather than Z=-102.5. Existing depth values remain readable but acquire the corrected rail-level meaning. All three spatial axes use the same local metre-to-Mercator scale; there is no vertical exaggeration. Camera perspective and the transparent cutaway are not measurements of real local terrain. The foundation planning overlay retains its separately documented illustrative centreline envelope.
+
+See [Blender station asset specification](docs/blender-stations.md) for three 150 m station variants, coordinate conventions, rail sockets and export requirements. No imported station assets or GLB loader are implemented in this stage.
+
+### Current direction: map-based metro planning
+
+The 3D metro demo is parked: Underground controls, surface demo marker/entrances and custom Three.js layer are no longer mounted. Its source code, station descriptor and Blender specification remain available for later development. Older saves still load; a saved underground view resumes in normal surface view, retaining camera, map preset and other analysis settings. Three.js is not included in the active map bundle.
+
+3D basemap buildings remain in Detailed. Existing rail, estimated foundations and density maps remain available. Future player-built metro will use map lines/station markers with explicit depth values; no construction tool is added by this visibility change. The earlier cutaway sections document the parked prototype, not the current interface.
+
+### 2D metro visual preview
+
+Map layers → Metro preview shows one fictional City Hall station with two parallel paths, elongated platform polygons, a translucent station envelope, a small station dot/name and depth labels. The orange central stroke demonstrates route styling over physical tracks. View preview focuses it; the checkbox hides all its layers. Buildings remain 3D in Detailed. The geometry uses surface map layers: depth is stored/displayed as numbers, not rendered as an underground volume. This stage is a visual reference, not existing infrastructure, a built network or player construction. Preview visibility is session-only and the demo is not a quicksave asset.
+
+### Line scale and building support rendering
+
+Metro preview track strokes use a 1.4 m map-space width (route 2 m, halo 2.8 m), converted to pixels at the demo latitude with exponential zoom stops and distant minimums. This is a cartographic line width, not a track gauge or tunnel diameter. Station/track geometry is unchanged. Platform and envelope fills render below building extrusions so they do not paint over lower building faces; thin track lines and labels remain readable overlays.
+
+Some provider tiles contain a hidden main outline and only elevated visible building parts (e.g. a lower outline of 120 m and visible parts starting at 120 m). The renderer reconstructs a lower mass from that outline up to the lowest visible part base, capped by the outline height. It only does so when no ground-level part is found within the outline. Existing part heights and minimum heights remain untouched; standalone elevated structures stay elevated. This is a visual fallback from mapped geometry, not surveyed architecture. Supports update as building source tiles finish loading; duplicate outlines are deduplicated. It is independent of metro intersections and is hidden alongside buildings in foundation mode.
