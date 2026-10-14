@@ -12,10 +12,12 @@ Undergrid is an early-alpha metro planning game for the browser. Explore New Yor
 - Clean and Detailed display modes, 3D buildings, and a camera you can rotate and tilt.
 - Population density, workplace density and district boundaries.
 - Existing railway alignments and an estimated foundation-risk overlay.
+- Two-click station placement with 100–300 m length, Side/Island platforms, depth, blueprints and local saving.
+- Single/Parallel track blueprints with station-end snapping, curved approaches, depth transitions and demolition.
 - A 2D metro visual prototype: curved parallel paths, elongated station platforms and numerical depth labels.
 - Local automatic saves, Continue, and restoration of the world and camera after a page reload.
 
-**This is a prototype in active development.** The metro shown is a fictional visual preview. Player construction, train operations and the economic simulation are planned; they are not playable in the current interface. Foundation values are gameplay estimates, not verified underground construction data. The earlier 3D metro experiment is retained in the source but is not enabled.
+**This is a prototype in active development.** The metro shown is a fictional visual preview. Station blueprint placement and confirmation are available. Connecting-track construction is available. Train operations and the economic simulation are still planned. Construction currently has no cost, slope or clearance checks. Foundation values are gameplay estimates, not verified underground construction data. The earlier 3D metro experiment is retained in the source but is not enabled.
 
 ## Screenshots
 
@@ -77,4 +79,4 @@ npm test
 
 ## Direction
 
-The next goal is map-based station and track placement with explicit depths, followed by blueprint construction, train routing and a realistic economic model. A future 3D underground view can build on the preserved prototype. These are development goals, not current features.
+The next goals are track geometry and clearance validation, train routing and a realistic economic model. A future 3D underground view can build on the preserved prototype. These are development goals, not current features.

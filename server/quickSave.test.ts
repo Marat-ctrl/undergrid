@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { quickSaveHandler } from './quickSave';
+import { DEFAULT_CONSTRUCTION,stretchedStation } from '../src/components/stationPlacement';
 import { DEFAULT_CAMERA } from '../src/gameSave';
 test('quick save persists on disk, survives a new server and rejects invalid overwrites',async()=>{
   const root=await mkdtemp(join(tmpdir(),'undergrid-save-'));
@@ -13,7 +14,8 @@ test('quick save persists on disk, survives a new server and rejects invalid ove
   let {server,url}=await start();
   try{
     assert.equal(await (await fetch(url)).json(),null);
-    const save={version:1,city:'new-york',active:true,updatedAt:100,camera:{...DEFAULT_CAMERA,zoom:15.4,pitch:50,bearing:35},preset:'detailed',analysis:{mode:'jobs'},underground:{enabled:true,depth:50},planning:{existingRail:true,foundations:false,plannedDepth:64}};
+    const track={id:'saved-track',mode:'parallel',stage:'constructed',start:{stationId:'saved-station',end:'end',lane:'pair'},end:{position:[-74.004,40.713],depth:-35}};
+    const save={version:1,city:'new-york',active:true,updatedAt:100,camera:{...DEFAULT_CAMERA,zoom:15.4,pitch:50,bearing:35},preset:'detailed',tracks:[track],stations:[{...stretchedStation([-74.007,40.712],[-74.006,40.712],DEFAULT_CONSTRUCTION)!,id:'saved-station',name:'Station 1',stage:'constructed'}],analysis:{mode:'jobs'},underground:{enabled:true,depth:50},planning:{existingRail:true,foundations:false,plannedDepth:64}};
     assert.equal((await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(save)})).status,200);
     assert.deepEqual(JSON.parse(await readFile(join(root,'saves','quick-save.json'),'utf8')),save);
     await new Promise<void>(resolve=>server.close(()=>resolve()));({server,url}=await start());
@@ -25,6 +27,10 @@ test('quick save persists on disk, survives a new server and rejects invalid ove
     const legacy={...save,updatedAt:101,analysis:{population:false,districts:true}};
     assert.equal((await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(legacy)})).status,200);
     assert.deepEqual((await (await fetch(url)).json()).analysis,{mode:'population'});
+    const demolished={...legacy,updatedAt:102,stations:[],tracks:[]};
+    assert.equal((await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(demolished)})).status,200);
+    await new Promise<void>(resolve=>server.close(()=>resolve()));({server,url}=await start());
+    const restored=await (await fetch(url)).json();assert.deepEqual(restored.stations,[]);assert.deepEqual(restored.tracks,[]);
     await writeFile(join(root,'saves','quick-save.json'),'broken JSON');assert.equal((await fetch(url)).status,422);
   }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));await rm(root,{recursive:true,force:true});}
 });
