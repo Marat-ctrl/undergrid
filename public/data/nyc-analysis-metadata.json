@@ -1,0 +1,46 @@
+{
+  "population_year": 2020,
+  "coverage": "The five boroughs of New York City. Surrounding counties are not covered.",
+  "tracts": 2325,
+  "population": 8804190,
+  "borough_population": {
+    "Manhattan": 1694251,
+    "Bronx": 1472654,
+    "Queens": 2405464,
+    "Staten Island": 495747,
+    "Brooklyn": 2736074
+  },
+  "downloaded": "2026-10-14",
+  "method": "Join shoreline-clipped NYC DCP 2020 tract polygons to Census 2020 TIGERweb GEOID. Density = POP100 / (AREALAND / 1,000,000), in residents per km\u00b2 of land. Coordinates rounded to 6 decimal places; no geometry-based area calculation. Two offshore-only tracts with zero population and land area are omitted. Any included tract with zero official land area has no density value.",
+  "sources": {
+    "tract_geometry": "https://data.cityofnewyork.us/City-Government/2020-Census-Tracts/63ge-mke6",
+    "population_and_land_area": "https://tigerweb.geo.census.gov/arcgis/rest/services/Census2020/tigerWMS_Census2020/MapServer/6",
+    "borough_geometry": "https://data.cityofnewyork.us/d/gthc-hcne",
+    "population_cross_check": "https://www.census.gov/about/history/stories/monthly/2023/january-2023.html"
+  },
+  "boundary_vintages": {
+    "tracts": "2020 census geography, NYC DCP current shoreline representation",
+    "boroughs": "NYC DCP release 26b, 2026-05-26"
+  },
+  "attribution": "Population and land area: U.S. Census Bureau. Shoreline polygons and borough boundaries: NYC Department of City Planning / NYC Open Data.",
+  "interpretation": "Residential density averaged across each census tract; not daytime occupancy, ridership demand or a building-level count.",
+  "jobs": {
+    "year": 2023,
+    "count": 4585129,
+    "workplace_blocks": 25445,
+    "borough_jobs": {
+      "Manhattan": 2504522,
+      "Bronx": 340785,
+      "Queens": 728370,
+      "Staten Island": 128209,
+      "Brooklyn": 883243
+    },
+    "source": "https://lehd.ces.census.gov/data/lodes/LODES8/ny/wac/ny_wac_S000_JT00_2023.csv.gz",
+    "source_sha256": "0274b2c3eabac9272c83674666e63d28690619a8111faf08531ecc54226d08c0",
+    "source_creation_dates": [
+      "20251202"
+    ],
+    "method": "Sum C000 from S000/JT00 Workplace Area Characteristics by first 11 digits of w_geocode (2020 census tract GEOID), then divide by 2020 Census land area in km\u00b2. All NYC workplace records match shoreline tracts. Tracts without a WAC record have zero covered jobs.",
+    "interpretation": "Covered jobs at workplaces, not employed residents or unique workers. All jobs (JT00), including secondary jobs; LEHD coverage does not include all employment. Tract average, not individual office locations."
+  }
+}

@@ -1,6 +1,7 @@
+import type { AnalysisMode } from './analysisLayers';
 import type { ExpressionSpecification, StyleSpecification } from 'maplibre-gl';
 export type DisplayPreset = 'clean' | 'detailed';
-export interface DisplayOptions { preset: DisplayPreset; buildings: boolean; }
+export interface DisplayOptions { preset: DisplayPreset; buildings: boolean; mode:AnalysisMode; }
 const source = 'openmaptiles';
 const tileUrl=import.meta.env.VITE_VECTOR_TILEJSON || 'https://tiles.openfreemap.org/planet';
 const text:ExpressionSpecification = ['coalesce', ['get', 'name:en'], ['get', 'name_en'], ['get', 'name:latin'], ['get', 'name']];

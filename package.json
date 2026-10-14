@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
-    "test": "tsx --test src/simulation/core.test.ts src/components/camera.test.ts server/quickSave.test.ts",
+    "test": "tsx --test src/simulation/core.test.ts src/components/camera.test.ts server/quickSave.test.ts src/components/analysisLayers.test.ts",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
