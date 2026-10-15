@@ -1,10 +1,11 @@
+import { STATION_APPROACH_METRES } from './railGeometry';
 import { MIN_STATION_LENGTH,MAX_STATION_LENGTH,stationHalfSpacing } from './constructionDimensions';
 import { MercatorCoordinate } from 'maplibre-gl';
 import { inCity, type Coordinate, type ConstructionSettings, type PlacedStation } from './stationPlacement';
 import { networkPorts, isTrackPortRef, trackForward, type PlacedTrack, type StationPort, type TrackPortRef } from './trackPlacement';
 export interface StationAttachment { port:TrackPortRef; lane:'pair'|'left'|'right'; }
-// Leave room for the existing 10 m spacing transition before the platform rails.
-export const STATION_CONNECTION_LENGTH=12;
+// Leave room for the station spacing transition before the platform rails.
+export const STATION_CONNECTION_LENGTH=STATION_APPROACH_METRES+2;
 export function stationConnectionPorts(stations:PlacedStation[],tracks:PlacedTrack[]):StationPort[]{
  const pairs=networkPorts(stations,tracks,'parallel').filter(p=>isTrackPortRef(p.ref));
  const singles=networkPorts(stations,tracks,'single').filter(p=>isTrackPortRef(p.ref)&&p.ref.lane==='single');

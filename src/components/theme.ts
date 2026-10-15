@@ -1,6 +1,6 @@
 // Neutral structures with restrained landscape colors. Routes keep their saved colors.
 export const MAP_PALETTE={
- land:'#f5f5f5',wood:'#c9d3c4',park:'#d5decf',water:'#bccdd5',
+ land:'#f5f5f5',wood:'#c9d3c4',park:'#d5decf',cemetery:'#d2d9cf',water:'#bccdd5',
  minorRoad:'#dedede',majorRoad:'#bdbdbd',path:'#c4c4c4',
  footprint:'#e2e2e2',footprintEdge:'#bcbcbc',building:'#d2d2d2',
  place:'#626262',neighborhood:'#737373',roadLabel:'#777777',poi:'#686868',

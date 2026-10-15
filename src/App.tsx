@@ -2,14 +2,14 @@ import { uniqueStationName } from './components/stationNames';
 import SaveDialog from './components/SaveDialog';
 import HowToPlay from './components/HowToPlay';
 import LinesPanel from './components/LinesPanel';
-import { buildLineNetwork,routeMetroLine,isMetroLineList,LINE_COLORS,MAX_LINES,MAX_LINE_STOPS,type MetroLine,type LineOverlay,type PlatformSide } from './components/metroLines';
+import { buildLineNetwork,routeMetroLine,isMetroLineList,lineStopAdditionIssue,LINE_COLORS,MAX_LINES,type MetroLine,type LineOverlay,type PlatformSide } from './components/metroLines';
 import { createNamedSave,readNamedSave } from './namedSaves';
 import { NetworkHistory,removeNetworkAsset } from './components/networkHistory';
 import { stationConnector,type StationAttachment } from './components/stationConnection';
 import { trackUsesStation,tracksToRemove,blueprintErrors,type PlacedTrack } from './components/trackPlacement';
 import { DEFAULT_CONSTRUCTION, MAX_STATIONS, type ConstructionSettings, type PlacedStation } from './components/stationPlacement';
 import ConstructionPanel from './components/ConstructionPanel';
-import { DEFAULT_PLANNING } from './components/underground';
+import { DEFAULT_PLANNING,normalizePlanning } from './components/planningLayers';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, FolderOpen, Save, Box, Check, Compass, HelpCircle, LoaderCircle, Menu, RotateCcw, X } from 'lucide-react';
 import Credits from './components/Credits';
@@ -38,12 +38,13 @@ export default function App() {
   const stationsRef=useRef(stations);stationsRef.current=stations;
   const lineNetwork=useMemo(()=>buildLineNetwork(stations,tracks),[stations,tracks]);
   const lineStatuses=useMemo(()=>new Map(lines.map(line=>[line.id,routeMetroLine(lineNetwork,line.stationIds,line.platforms)])),[lines,lineNetwork]);
-  const activeRoute=useMemo(()=>lineDraft?routeMetroLine(lineNetwork,lineDraft.stationIds,lineDraft.platforms):selectedLineId?lineStatuses.get(selectedLineId)??null:null,[lineDraft?.stationIds,lineDraft?.platforms,lineNetwork,selectedLineId,lineStatuses]);
+  const draftRoute=useMemo(()=>lineDraft?routeMetroLine(lineNetwork,lineDraft.stationIds,lineDraft.platforms):null,[lineDraft?.stationIds,lineDraft?.platforms,lineNetwork]);
+  const activeRoute=lineDraft?draftRoute:selectedLineId?lineStatuses.get(selectedLineId)??null:null;
   const lineOverlay=useMemo<LineOverlay[]>(()=>{
     const overlays=lines.filter(line=>line.id!==lineDraft?.id).map(line=>{const route=lineStatuses.get(line.id)!;return {color:line.color,paths:route.paths,gaps:route.gaps.map(gap=>gap.path),stationIds:line.stationIds,platforms:line.platforms};});
-    if(lineDraft&&activeRoute)overlays.push({color:lineDraft.color,paths:activeRoute.paths,gaps:activeRoute.gaps.map(gap=>gap.path),stationIds:lineDraft.stationIds,platforms:lineDraft.platforms});
+    if(lineDraft&&draftRoute)overlays.push({color:lineDraft.color,paths:draftRoute.paths,gaps:draftRoute.gaps.map(gap=>gap.path),stationIds:lineDraft.stationIds,platforms:lineDraft.platforms});
     return overlays;
-  },[lines,lineStatuses,lineDraft?.id,lineDraft?.color,lineDraft?.stationIds,lineDraft?.platforms,activeRoute]);
+  },[lines,lineStatuses,lineDraft?.id,lineDraft?.color,lineDraft?.stationIds,lineDraft?.platforms,draftRoute]);
   const buildErrors=useMemo(()=>blueprintErrors(tracks,stations),[tracks,stations]);
   const [constructionSettings,setConstructionSettings]=useState<ConstructionSettings>(DEFAULT_CONSTRUCTION);
   const [drawing,setDrawing]=useState(false);
@@ -71,12 +72,12 @@ export default function App() {
   useEffect(()=>{
     const writer=createQuickSaver(()=>setSaveError('Quick save could not be written.'),()=>setHasSave(true));saver.current=writer;
     let alive=true;
-    void readQuickSave().then(save=>{if(!alive)return;if(save){linesRef.current=save.lines??[];setLines(linesRef.current);setHasSave(true);tracksRef.current=save.tracks??[];setTracks(tracksRef.current);setSelectedTrack(null);stationsRef.current=save.stations??[];setStations(stationsRef.current);camera.current=save.camera;setInitialCamera(save.camera);setDisplay({preset:save.preset,buildings:save.preset==='detailed',...normalizeAnalysis(save.analysis),...(save.planning??DEFAULT_PLANNING),stationLabels:save.stationLabels??false});activeWorld.current=save.active;setScreen(save.active?'loading':'home');}else setScreen('home');}).catch(()=>{if(alive){setSaveError('Quick save could not be loaded. Start a new world to replace it.');setScreen('home');}});
+    void readQuickSave().then(save=>{if(!alive)return;if(save){linesRef.current=save.lines??[];setLines(linesRef.current);setHasSave(true);tracksRef.current=save.tracks??[];setTracks(tracksRef.current);setSelectedTrack(null);stationsRef.current=save.stations??[];setStations(stationsRef.current);camera.current=save.camera;setInitialCamera(save.camera);setDisplay({preset:save.preset,buildings:save.preset==='detailed',...normalizeAnalysis(save.analysis),...normalizePlanning(save.planning),stationLabels:save.stationLabels??false});activeWorld.current=save.active;setScreen(save.active?'loading':'home');}else setScreen('home');}).catch(()=>{if(alive){setSaveError('Quick save could not be loaded. Start a new world to replace it.');setScreen('home');}});
     const flush=()=>writer.flush(true);const hidden=()=>{if(document.visibilityState==='hidden')flush();};
     window.addEventListener('pagehide',flush);document.addEventListener('visibilitychange',hidden);
     return()=>{alive=false;window.removeEventListener('pagehide',flush);document.removeEventListener('visibilitychange',hidden);writer.dispose();saver.current=null;};
   },[]);
-  function currentSnapshot():QuickSave {return {version:1,city:'new-york',active:activeWorld.current,updatedAt:Date.now(),camera:{...camera.current},preset:displayRef.current.preset,lines:linesRef.current.map(line=>({...line,stationIds:[...line.stationIds],...(line.platforms?{platforms:[...line.platforms]}:{})})),tracks:tracksRef.current.map(track=>({...track,start:{...track.start},end:{...track.end}})),stations:stationsRef.current.map(station=>({...station,start:[...station.start],end:[...station.end]})),analysis:{mode:displayRef.current.mode},stationLabels:displayRef.current.stationLabels,planning:{existingRail:displayRef.current.existingRail,foundations:displayRef.current.foundations,plannedDepth:displayRef.current.plannedDepth}};}
+  function currentSnapshot():QuickSave {return {version:1,city:'new-york',active:activeWorld.current,updatedAt:Date.now(),camera:{...camera.current},preset:displayRef.current.preset,lines:linesRef.current.map(line=>({...line,stationIds:[...line.stationIds],...(line.platforms?{platforms:[...line.platforms]}:{})})),tracks:tracksRef.current.map(track=>({...track,start:{...track.start},end:{...track.end}})),stations:stationsRef.current.map(station=>({...station,start:[...station.start],end:[...station.end]})),analysis:{mode:displayRef.current.mode},stationLabels:displayRef.current.stationLabels,planning:{existingRail:displayRef.current.existingRail}};}
   function persist(immediate=false){saver.current?.save(currentSnapshot(),immediate);}
   useEffect(()=>{if(activeWorld.current)persist();},[display]);
   function cameraChanged(next:SavedCamera){camera.current=next;if(activeWorld.current)persist();}
@@ -92,7 +93,7 @@ export default function App() {
         else if(layersOpen)setLayersOpen(false);
         else if (help) setHelp(false);
         else if(pausedMenu)setPausedMenu(false);
-        else if(linesOpen){if(lineDraft)setLineDraft(null);else setLinesOpen(false);}
+        else if(linesOpen){if(lineDraft)setLineDraft(null);else openLines(false);}
         else if(drawing)controls.current?.cancelStation();
         else if(selectedStation)setSelectedStation(null);
         else if(selectedTrack)setSelectedTrack(null);
@@ -121,7 +122,7 @@ export default function App() {
     controls.current?.cancelStation();history.current.clear();setUndoCount(0);
     tracksRef.current=save.tracks??[];setTracks(tracksRef.current);stationsRef.current=save.stations??[];setStations(stationsRef.current);setSelectedTrack(null);setSelectedStation(null);setTrackHint('');setConstructionSettings({...DEFAULT_CONSTRUCTION});setConstructionOpen(false);setLayersOpen(false);setPausedMenu(false);setHelp(false);
     camera.current={...save.camera};setInitialCamera(camera.current);
-    const restored:DisplayOptions={preset:save.preset,buildings:save.preset==='detailed',...normalizeAnalysis(save.analysis),...(save.planning??DEFAULT_PLANNING),stationLabels:save.stationLabels??false};
+    const restored:DisplayOptions={preset:save.preset,buildings:save.preset==='detailed',...normalizeAnalysis(save.analysis),...normalizePlanning(save.planning),stationLabels:save.stationLabels??false};
     displayRef.current=restored;setDisplay(restored);activeWorld.current=true;setSaveError('');persist(true);setStatus('loading');setAttempt(value=>value+1);setScreen('loading');
   }
   async function saveGame(name:string){const saved=await createNamedSave(name,{...currentSnapshot(),active:true});setSaveNotice(`Saved: ${saved.name}`);}
@@ -142,14 +143,12 @@ export default function App() {
     setUndoCount(history.current.size);setSelectedStation(null);setSelectedTrack(null);setTrackHint('');
   }
   function replaceLines(next:MetroLine[]){if(JSON.stringify(next)===JSON.stringify(linesRef.current))return;history.current.push({stations:stationsRef.current,tracks:tracksRef.current,lines:linesRef.current});setUndoCount(history.current.size);linesRef.current=next;setLines(next);if(activeWorld.current)persist(true);}
-  function openLines(open:boolean){setLinesOpen(open);setLineDraft(null);setLineNotice('');if(open){changeConstructionOpen(false);setSelectedLineId(current=>linesRef.current.some(line=>line.id===current)?current:linesRef.current[0]?.id??null);}}
+  function openLines(open:boolean){setLinesOpen(open);setLineDraft(null);setLineNotice('');setSelectedLineId(null);if(open)changeConstructionOpen(false);}
   function createLine(){if(linesRef.current.length>=MAX_LINES)return;setLineNotice('');setLineDraft({id:crypto.randomUUID(),name:`Line ${Math.max(0,...linesRef.current.map(line=>Number(line.name.match(/^Line (\d+)$/)?.[1])||0))+1}`,color:LINE_COLORS[linesRef.current.length%LINE_COLORS.length],stationIds:[],platforms:[]});}
   function addLineStop(id:string,side:PlatformSide){
     if(!lineDraft)return;const station=stationsRef.current.find(s=>s.id===id&&s.stage==='constructed'&&s.kind!=='depot');
     if(!station){setLineNotice('Choose a built passenger station.');return;}
-    const ids=lineDraft.stationIds;if(ids.length>=MAX_LINE_STOPS){setLineNotice(`A line can have up to ${MAX_LINE_STOPS} stops.`);return;}
-    if(ids.length>2&&ids[0]===ids.at(-1)){setLineNotice('The loop is closed. Remove its last stop to extend it.');return;}
-    if(ids.includes(id)&&!(ids.length>=2&&id===ids[0])){setLineNotice('This station is already on the line.');return;}
+    const ids=lineDraft.stationIds,issue=lineStopAdditionIssue(lineDraft,id,side);if(issue){setLineNotice(issue);return;}
     setLineNotice('');setLineDraft({...lineDraft,stationIds:[...ids,id],platforms:[...(lineDraft.platforms??ids.map(()=> 'right' as const)),side]});
   }
   function saveLine(){if(!lineDraft||!activeRoute?.ready||!isMetroLineList([{...lineDraft,name:lineDraft.name.trim()}]))return;const next={...lineDraft,name:lineDraft.name.trim()};replaceLines(linesRef.current.some(line=>line.id===next.id)?linesRef.current.map(line=>line.id===next.id?next:line):[...linesRef.current,next]);setSelectedLineId(next.id);setLineDraft(null);setLineNotice('');}
@@ -198,9 +197,9 @@ export default function App() {
     {screen === 'loading' && <div className="loading-screen"><div className="loading-content"><span className="loading-city">NEW YORK</span><h1>{status === 'error' ? 'The city is out of reach.' : 'Loading your world.'}</h1><p>{status === 'error' ? 'Map tiles could not be loaded. Check your internet connection and try again.' : 'Connecting streets, neighborhoods and possibilities.'}</p>{status === 'error' ? <div className="loading-actions"><button className="menu-primary" onClick={retryWorld}><RotateCcw size={16}/> Try again</button><button onClick={() => exitWorld('cities')}>Back to cities</button></div> : <><LoaderCircle size={23} className="spinner"/><small>Preparing city map</small><button className="loading-cancel" onClick={() => exitWorld('cities')}>Cancel</button></>}</div></div>}
     {screen === 'world' && <>
       <header className="world-header"><button className="world-menu-button" onClick={() => setPausedMenu(true)} aria-label="Open menu"><Menu size={15}/></button><span className="world-city">New York</span></header>
-      <div className="world-tools" aria-label="Map controls"><div className="display-presets" aria-label="Map detail">{(['clean','detailed'] as DisplayPreset[]).map(preset=><button key={preset} className={display.preset===preset?'selected':''} aria-pressed={display.preset===preset} onClick={()=>setDisplay(current=>({...current,preset,buildings:preset==='detailed'}))}>{preset.charAt(0).toUpperCase()+preset.slice(1)}</button>)}</div><MapLayersMenu display={display} open={layersOpen} onOpenChange={setLayersOpen} onStationLabels={stationLabels=>setDisplay(current=>({...current,stationLabels}))} onChange={mode=>setDisplay(current=>({...current,mode,foundations:mode!=='off'?false:current.foundations}))} onPlanning={patch=>setDisplay(current=>({...current,...patch,mode:patch.foundations?'off':current.mode}))}/><button className="world-tool" onClick={()=>controls.current?.tilt()} aria-label="Toggle tilted view" title="Toggle tilted view"><Box size={16}/></button><button className="world-tool" onClick={()=>controls.current?.north()} aria-label="Face north" title="Face north"><Compass size={16}/></button></div>
+      <div className="world-tools" aria-label="Map controls"><div className="display-presets" aria-label="Map detail">{(['clean','detailed'] as DisplayPreset[]).map(preset=><button key={preset} className={display.preset===preset?'selected':''} aria-pressed={display.preset===preset} onClick={()=>setDisplay(current=>({...current,preset,buildings:preset==='detailed'}))}>{preset.charAt(0).toUpperCase()+preset.slice(1)}</button>)}</div><MapLayersMenu display={display} open={layersOpen} onOpenChange={setLayersOpen} onStationLabels={stationLabels=>setDisplay(current=>({...current,stationLabels}))} onChange={mode=>setDisplay(current=>({...current,mode}))} onPlanning={patch=>setDisplay(current=>({...current,...patch}))}/><button className="world-tool" onClick={()=>controls.current?.tilt()} aria-label="Toggle tilted view" title="Toggle tilted view"><Box size={16}/></button><button className="world-tool" onClick={()=>controls.current?.north()} aria-label="Face north" title="Face north"><Compass size={16}/></button></div>
       <div className={constructionOpen||linesOpen?'construction-legend-shift':''}><AnalysisLegend display={display} status={analysisStatus} onRetry={()=>setAnalysisRetry(value=>value+1)}/></div>
-      <LinesPanel open={linesOpen} onOpenChange={openLines} lines={lines} selectedId={selectedLineId} onSelect={id=>{setSelectedLineId(id);setLineDraft(null);setLineNotice('');}} draft={lineDraft} onDraftChange={line=>{setLineDraft(line);setLineNotice('');}} onCreate={createLine} onCancel={()=>{setLineDraft(null);setLineNotice('');}} onSave={saveLine} onDelete={deleteLine} onAddStop={addLineStop} stations={stations} route={activeRoute} statuses={lineStatuses} notice={lineNotice} onUndo={undo} canUndo={undoCount>0}/>
+      <LinesPanel open={linesOpen} onOpenChange={openLines} lines={lines} selectedId={selectedLineId} onSelect={id=>{setSelectedLineId(current=>current===id?null:id);setLineDraft(null);setLineNotice('');}} draft={lineDraft} onDraftChange={line=>{setLineDraft(line);setLineNotice('');}} onCreate={createLine} onCancel={()=>{setLineDraft(null);setLineNotice('');}} onSave={saveLine} onDelete={deleteLine} onAddStop={addLineStop} stations={stations} route={activeRoute} statuses={lineStatuses} notice={lineNotice} onUndo={undo} canUndo={undoCount>0}/>
       <ConstructionPanel selectionName={stations.find(station=>station.id===selectedStation)?.name??(selectedTrack?'Track section':undefined)} onUndo={undo} canUndo={undoCount>0} validationMessage={buildErrors[0]??''} open={constructionOpen} onOpenChange={changeConstructionOpen} settings={constructionSettings} onSettingsChange={patch=>{if(patch.tool&&patch.tool!=='select'){setSelectedStation(null);setSelectedTrack(null);}setConstructionSettings(current=>({...current,...patch}));}} depotBlueprints={stations.filter(station=>station.kind==='depot'&&station.stage==='blueprint').length} blueprints={stations.filter(station=>station.kind!=='depot'&&station.stage==='blueprint').length} drawing={drawing} selected={stations.some(station=>station.id===selectedStation&&station.stage==='blueprint')||tracks.some(track=>track.id===selectedTrack&&track.stage==='blueprint')} onBuild={buildStations} onClear={clearStations} onDelete={deleteSelectedStation} constructedSelected={stations.some(station=>station.id===selectedStation&&station.stage==='constructed')||tracks.some(track=>track.id===selectedTrack&&track.stage==='constructed')} onDemolish={demolishSelectedStation} trackBlueprints={tracks.filter(track=>track.stage==='blueprint').length} trackHint={trackHint} connectedCount={selectedStation?tracksToRemove(tracks,tracks.filter(track=>trackUsesStation(track,selectedStation)).map(t=>t.id)).size:selectedTrack?tracksToRemove(tracks,[selectedTrack]).size-1:0}/>
 
 

@@ -1,0 +1,34 @@
+{
+  "coverage": "All 12 municipalities of Hudson County, New Jersey (2020 Census county 34017).",
+  "population_year": 2020,
+  "jobs_year": 2023,
+  "tracts": 183,
+  "municipalities": 12,
+  "population": 724854,
+  "land_km2": 119.640822,
+  "jobs": 293100,
+  "workplace_blocks": 2829,
+  "county_blocks": 4119,
+  "downloaded": "2026-10-15",
+  "sources": {
+    "tract_geometry_population_land": "https://tigerweb.geo.census.gov/arcgis/rest/services/Census2020/tigerWMS_Census2020/MapServer/6",
+    "municipal_boundaries_and_population_cross_check": "https://tigerweb.geo.census.gov/arcgis/rest/services/Census2020/tigerWMS_Census2020/MapServer/20",
+    "workplace_counts": "https://lehd.ces.census.gov/data/lodes/LODES8/nj/wac/nj_wac_S000_JT00_2023.csv.gz",
+    "block_municipality_crosswalk": "https://lehd.ces.census.gov/data/lodes/LODES8/nj/nj_xwalk.csv.gz",
+    "water_geometry": "https://www2.census.gov/geo/tiger/TIGER2020/AREAWATER/tl_2020_34017_areawater.zip",
+    "population_cross_check": "https://www.census.gov/quickfacts/hudsoncountynewjersey"
+  },
+  "source_sha256": {
+    "hudson-municipalities-2020.geojson": "c1cfb8bb9ebdb0df36c5e99ba8c87a1ef1b74b686d7612b564e48daf15f19e69",
+    "hudson-tracts-2020.geojson": "1472822eeb18eeaf0bd8e285fae2cc467a89639267c91cb95ae165f415800c64",
+    "hudson-water-2020.zip": "6b4b4f89aa45cca7f6eed0bbe540550a69043721f8c938dee8298696bc148d61",
+    "nj-wac-2023.csv.gz": "48028f3ba40308ce2ea56c58bee9d9e60b9828007d930146f2aa5525cf653a40",
+    "nj-xwalk.csv.gz": "54c9dca7785a684c1bc92bc1cb1d8f0dad8a993b4171893c4927f2042847d8fb"
+  },
+  "jobs_source_creation_dates": [
+    "20251202"
+  ],
+  "method": "Select all Hudson County blocks from the LODES crosswalk. Verify that each complete 2020 tract belongs to one municipality and cross-check population and land totals for all 12 municipalities against Census 2020 county subdivisions. Sum S000/JT00 C000 workplace jobs for county blocks. Divide counts by official 2020 Census land km2. Clip display polygons to municipal boundaries and subtract TIGER 2020 area water; snap coordinates to 0.000001 degrees. Display geometry is not used to calculate density.",
+  "interpretation": "Census tract averages, not building-level occupancy. Jobs include covered secondary jobs and do not represent all employment. NJ units are census tracts; municipality names come from official county subdivisions, not inferred neighborhoods or wards.",
+  "attribution": "U.S. Census Bureau: Census 2020 TIGERweb, TIGER/Line area water and LEHD LODES."
+}

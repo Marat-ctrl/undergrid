@@ -1111,7 +1111,7 @@ button svg {
   padding-top: 8px
 }
 
-.planning-options>label,.planned-depth>label {
+.planning-options>label {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1120,31 +1120,12 @@ button svg {
   font-size: 12px
 }
 
+.planning-options>label:last-child {
+  border-bottom: 0
+}
+
 .planning-options input {
   accent-color: var(--text-muted)
-}
-
-.planned-depth input {
-  width: 100%
-}
-
-.foundation-key {
-  display: grid;
-  gap: 6px;
-  margin: 10px 0;
-  font-size: 11px
-}
-
-.foundation-key span {
-  display: flex;
-  gap: 8px;
-  align-items: center
-}
-
-.foundation-key i {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px
 }
 
 .rail-legend {
@@ -1650,11 +1631,99 @@ button svg {
   text-align: center;
   font-size: 11px;
   line-height: 1.3;
-  text-shadow: 0 1px 2px var(--ink),1px 0 2px var(--ink),-1px 0 2px var(--ink);
+  text-shadow: -1px 0 0 #ffffff,1px 0 0 #ffffff,0 -1px 0 #ffffff,0 1px 0 #ffffff;
 }
 
 .depth-station {
   font-weight: 500;
+}
+
+.platform-picker {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.platform-picker[hidden] {
+  display: none;
+}
+
+.platform-picker svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.platform-picker line {
+  stroke: var(--route-color, #111111);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: .7;
+}
+
+.platform-picker-name {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 220px;
+  color: #333333;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  white-space: pre-line;
+  text-shadow: -1px 0 0 #ffffff,1px 0 0 #ffffff,0 -1px 0 #ffffff,0 1px 0 #ffffff;
+}
+
+.platform-choice {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--route-color, #111111);
+  border-radius: 50%;
+  background: #ffffff;
+  color: var(--route-color, #111111);
+  pointer-events: auto;
+  box-shadow: 0 1px 5px #00000018;
+}
+
+.platform-choice-plus {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.platform-choice small {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 11px;
+  height: 11px;
+  border: 1px solid #d9d9d9;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #444444;
+  font-size: 8px;
+}
+
+.platform-choice:hover {
+  background: var(--route-color, #111111);
+  color: #ffffff;
+}
+
+.platform-choice:focus-visible {
+  outline: 2px solid #111111;
+  outline-offset: 3px;
 }
 
 .depth-port {

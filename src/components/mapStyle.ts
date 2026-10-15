@@ -1,5 +1,5 @@
 import { MAP_PALETTE as palette } from './theme';
-import { foundationExpression, type PlanningLayers } from './underground';
+import { type PlanningLayers } from './planningLayers';
 import type { AnalysisMode } from './analysisLayers';
 import type { ExpressionSpecification, LineLayerSpecification, StyleSpecification } from 'maplibre-gl';
 export type DisplayPreset = 'clean' | 'detailed';
@@ -15,6 +15,7 @@ export function createMapStyle(): StyleSpecification {
     layers: [
       { id: 'background', type: 'background', paint: { 'background-color': palette.land } },
       // Urban parks and gardens are grass landcover; the park layer covers protected areas.
+      { id: 'cemeteries', type: 'fill', source, 'source-layer': 'landuse', filter: ['==',['get','class'],'cemetery'], paint: { 'fill-color': palette.cemetery, 'fill-opacity': .85 } },
       { id: 'green-spaces', type: 'fill', source, 'source-layer': 'landcover', filter: ['==',['get','class'],'grass'], paint: { 'fill-color': palette.park, 'fill-opacity': .8 } },
       { id: 'wood', type: 'fill', source, 'source-layer': 'landcover', filter: ['==',['get','class'],'wood'], paint: { 'fill-color': palette.wood, 'fill-opacity': .7 } },
       { id: 'parks', type: 'fill', source, 'source-layer': 'park', paint: { 'fill-color': palette.park, 'fill-opacity': .8 } },
@@ -25,7 +26,6 @@ export function createMapStyle(): StyleSpecification {
       { id: 'paths', type: 'line', source, 'source-layer': 'transportation', minzoom: 14, filter:['match',['get','class'],['path','track'],true,false], layout:{visibility:'none'},paint:{'line-color':palette.path,'line-width':1,'line-dasharray':[2,2]} },
 
       { id:'building-footprints',type:'fill',source:'building-tiles','source-layer':'building',minzoom:13,paint:{'fill-color':palette.footprint,'fill-outline-color':palette.footprintEdge,'fill-opacity':.8} },
-      {id:'foundation-risk',type:'fill',source:'building-tiles','source-layer':'building',minzoom:13,filter:['<=',['coalesce',['get','render_min_height'],0],0],layout:{visibility:'none'},paint:{'fill-color':foundationExpression(25),'fill-opacity':.85,'fill-outline-color':palette.footprintEdge}},
       {id:'building-supports-3d',type:'fill-extrusion',source:'building-supports',minzoom:14,layout:{visibility:'none'},paint:{'fill-extrusion-color':palette.building,'fill-extrusion-base':0,'fill-extrusion-height':['get','supportHeight'],'fill-extrusion-opacity':1}},
       { id: 'buildings-3d', type: 'fill-extrusion', source:'building-tiles', 'source-layer': 'building', minzoom: 14, filter:['!=',['get','hide_3d'],true],layout:{visibility:'none'},paint:{'fill-extrusion-color':palette.building,'fill-extrusion-height':['coalesce',['get','render_height'],10],'fill-extrusion-base':['coalesce',['get','render_min_height'],0],'fill-extrusion-opacity':1} },
       ...(['surface','bridge','tunnel'] as const).map((kind):LineLayerSpecification=>({id:`rail-${kind}`,type:'line' as const,source:'rail-tiles','source-layer':'transportation',filter:['all',['match',['get','class'],['rail','transit'],true,false],kind==='surface'?['!',['in',['coalesce',['get','brunnel'],''],['literal',['bridge','tunnel']]]]:['==',['get','brunnel'],kind]],layout:{visibility:'none' as const,'line-cap':'round' as const},paint:{'line-color':kind==='tunnel'?palette.railTunnel:kind==='bridge'?palette.railBridge:palette.railSurface,'line-width':['interpolate',['linear'],['zoom'],10,.325,15,.6,18,1],'line-opacity':.9,...(kind==='tunnel'?{'line-dasharray':[3,2]}:{})}})),

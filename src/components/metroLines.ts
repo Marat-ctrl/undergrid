@@ -15,16 +15,24 @@ export interface LineRoute {ready:boolean;metres:number;paths:LinePath[];gaps:Li
 export interface LineOverlay {color:string;paths:LinePath[];gaps:LinePath[];stationIds:string[];platforms?:PlatformSide[];}
 type Lane='left'|'right'|'single';
 interface Node {position:Coordinate;depth:number;stationId?:string;}
-interface Edge extends LinePath {to:string;metres:number;}
+type Direction=[number,number];
+interface Edge extends LinePath {id:number;to:string;metres:number;entry?:Direction;exit?:Direction;}
 export interface LineNetwork {nodes:Map<string,Node>;edges:Map<string,Edge[]>;stops:Map<string,string[]>;stations:PlacedStation[];}
 const validId=(value:unknown):value is string=>typeof value==='string'&&value.length>0&&value.length<=80;
-export function validLineStops(ids:unknown):ids is string[]{
+export function validLineStops(ids:unknown,platforms?:unknown):ids is string[]{
  if(!Array.isArray(ids)||ids.length<2||ids.length>MAX_LINE_STOPS||!ids.every(validId))return false;
- const open=ids.length>2&&ids[0]===ids.at(-1)?ids.slice(0,-1):ids;
- return new Set(open).size===open.length;
+ if(platforms!==undefined&&(!Array.isArray(platforms)||platforms.length!==ids.length||!platforms.every(side=>side==='left'||side==='right')))return false;
+ // Visits are ordered occurrences, not unique station identities. Opposite faces can
+ // be consecutive at a terminus, provided the network has a real path between them.
+ return ids.every((id,i)=>!i||id!==ids[i-1]||Array.isArray(platforms)&&platforms[i]!==platforms[i-1]);
+}
+export function lineStopAdditionIssue(line:MetroLine,id:string,side:PlatformSide){
+ if(line.stationIds.length>=MAX_LINE_STOPS)return `A line can have up to ${MAX_LINE_STOPS} stops.`;
+ if(line.stationIds.at(-1)===id&&(line.platforms?.at(-1)??'right')===side)return 'This platform is already the last stop. Choose another platform or station.';
+ return '';
 }
 // Missing stations are retained as broken lines after demolition, rather than invalidating a save.
-export function isMetroLineList(value:unknown):value is MetroLine[]{return Array.isArray(value)&&value.length<=MAX_LINES&&value.every(line=>line&&typeof line==='object'&&validId(line.id)&&typeof line.name==='string'&&line.name.trim().length>0&&line.name.length<=40&&!/[\u0000-\u001f\u007f]/.test(line.name)&&typeof line.color==='string'&&/^#[0-9a-f]{6}$/i.test(line.color)&&validLineStops(line.stationIds)&&(line.platforms===undefined||Array.isArray(line.platforms)&&line.platforms.length===line.stationIds.length&&line.platforms.every((side:unknown)=>side==='left'||side==='right')))&&new Set(value.map(line=>line.id)).size===value.length;}
+export function isMetroLineList(value:unknown):value is MetroLine[]{return Array.isArray(value)&&value.length<=MAX_LINES&&value.every(line=>line&&typeof line==='object'&&validId(line.id)&&typeof line.name==='string'&&line.name.trim().length>0&&line.name.length<=40&&!/[\u0000-\u001f\u007f]/.test(line.name)&&typeof line.color==='string'&&/^#[0-9a-f]{6}$/i.test(line.color)&&validLineStops(line.stationIds,line.platforms))&&new Set(value.map(line=>line.id)).size===value.length;}
 const trackNode=(id:string,lane:Lane,at:number)=>`t:${id}:${lane}:${at}`;
 const stopNode=(id:string,lane:Lane,at:number)=>`s:${id}:${lane}:${at}`;
 const lerpPoint=(a:Coordinate,b:Coordinate,t:number):Coordinate=>{const p=MercatorCoordinate.fromLngLat(a),q=MercatorCoordinate.fromLngLat(b),c=new MercatorCoordinate(p.x+(q.x-p.x)*t,p.y+(q.y-p.y)*t).toLngLat();return [c.lng,c.lat];};
@@ -34,6 +42,14 @@ function slice(g:RailGeometry,path:Coordinate[],from:number,to:number):LinePath{
  for(let i=1;i<g.lengths.length-1;i++)if(g.lengths[i]>from*g.length&&g.lengths[i]<to*g.length){points.push(path[i]);depths.push(g.depths[i]);}
  points.push(b.position);depths.push(b.depth);return {points,depths};
 }
+function pathTangents(points:Coordinate[]){
+ let entry:Direction|undefined,exit:Direction|undefined,previous=points.length?MercatorCoordinate.fromLngLat(points[0]):undefined;
+ for(let i=1;i<points.length;i++){
+   const next=MercatorCoordinate.fromLngLat(points[i]),dx=next.x-previous!.x,dy=next.y-previous!.y,length=Math.hypot(dx,dy);previous=next;
+   if(length>1e-12){exit=[dx/length,dy/length];entry??=exit;}
+ }
+ return {entry,exit};
+}
 export function buildLineNetwork(stations:PlacedStation[],tracks:PlacedTrack[]):LineNetwork{
  const nodes=new Map<string,Node>(),edges=new Map<string,Edge[]>(),stops=new Map<string,string[]>();
  const built=tracks.filter(t=>t.stage==='constructed'),geometries=new Map(built.flatMap(track=>{const g=trackGeometry(track,stations,tracks);return g?[[track.id,g] as const]:[];}));
@@ -42,7 +58,8 @@ export function buildLineNetwork(stations:PlacedStation[],tracks:PlacedTrack[]):
  const cuts=new Map(built.map(track=>[track.id,new Set([0,1])]));
  for(const [id,list] of switches)for(const s of list){cuts.get(id)!.add(s.near);cuts.get(id)!.add(s.far);}
  for(const track of built)for(const end of [track.start,track.end])if(isTrackPointRef(end))cuts.get(end.trackId)?.add(end.at);
- const connect=(from:string,to:string,metres:number,path:LinePath)=>{if(nodes.has(from)&&nodes.has(to)){const list=edges.get(from)??[];list.push({to,metres,...path});edges.set(from,list);}};
+ let edgeId=0;
+ const connect=(from:string,to:string,metres:number,path:LinePath)=>{if(nodes.has(from)&&nodes.has(to)){const list=edges.get(from)??[];list.push({id:edgeId++,to,metres,points:path.points,depths:path.depths,...pathTangents(path.points)});edges.set(from,list);}};
  const passage=(from:string,to:string,metres:number,path:LinePath,forward:boolean)=>{if(forward)connect(from,to,metres,path);else connect(to,from,metres,{points:[...path.points].reverse(),depths:[...path.depths].reverse()});};
  for(const station of stations.filter(s=>s.stage==='constructed'&&s.kind!=='depot')){
    const midpointNodes:string[]=[];
@@ -85,7 +102,8 @@ export function buildLineNetwork(stations:PlacedStation[],tracks:PlacedTrack[]):
  }
  return {nodes,edges,stops,stations};
 }
-interface SearchState {node:string;stop:number;cost:number;key:string;}
+interface Arrival {edge:number;direction:Direction;}
+interface SearchState {node:string;stop:number;cost:number;key:string;arrival?:Arrival;}
 // A small binary heap keeps graph search independent of map rendering and camera frames.
 class Queue {
  items:SearchState[]=[];
@@ -96,17 +114,25 @@ export function routeMetroLine(network:LineNetwork,stationIds:string[],platforms
  const empty={ready:false,metres:0,paths:[],gaps:[]};
  if(stationIds.length<2)return {...empty,issue:'Choose at least two built stations.'};
  if(platforms&&(platforms.length!==stationIds.length||platforms.some(side=>side!=='left'&&side!=='right')))return {...empty,issue:'Choose a platform for each stop.'};
- if(!validLineStops(stationIds))return {...empty,issue:'Use distinct stations, or repeat the first station once to close a loop.'};
+ if(!validLineStops(stationIds,platforms))return {...empty,issue:`Use up to ${MAX_LINE_STOPS} stops. Consecutive visits must use different platforms.`};
  const missing=stationIds.find(id=>!network.stops.has(id));if(missing)return {...empty,issue:'A stop is missing or unbuilt. Edit the stop list to repair this line.'};
  const queue=new Queue(),costs=new Map<string,number>(),previous=new Map<string,{key:string;edge:Edge}>();
- const enqueue=(node:string,stop:number,cost:number,from?:{key:string;edge:Edge})=>{const key=JSON.stringify([node,stop]);if(cost>=(costs.get(key)??Infinity))return;costs.set(key,cost);if(from)previous.set(key,from);queue.push({node,stop,cost,key});};
+ const enqueue=(node:string,stop:number,cost:number,arrival?:Arrival,from?:{key:string;edge:Edge})=>{const key=JSON.stringify([node,stop,arrival?.edge??null]);if(cost>=(costs.get(key)??Infinity))return;costs.set(key,cost);if(from)previous.set(key,from);queue.push({node,stop,cost,key,arrival});};
  const stopNodes=(index:number)=>platforms?[stopNode(stationIds[index],platforms[index],.5)]:network.stops.get(stationIds[index])!;
  for(const node of stopNodes(0))enqueue(node,0,0);
  let best:SearchState|undefined,complete:SearchState|undefined;
  while(queue.items.length){const state=queue.pop()!;if(state.cost!==costs.get(state.key))continue;
    if(!best||state.stop>best.stop)best=state;
    if(state.stop===stationIds.length-1){complete=state;break;}
-   for(const edge of network.edges.get(state.node)??[]){const nextStop=stopNodes(state.stop+1).includes(edge.to)?state.stop+1:state.stop;enqueue(edge.to,nextStop,state.cost+edge.metres,{key:state.key,edge});}
+   for(const edge of network.edges.get(state.node)??[]){
+     // A turnout joins forward tangents; it is not a place to reverse the train.
+     // Carry heading through zero-length station/track links as well.
+     if(state.arrival&&edge.entry&&state.arrival.direction[0]*edge.entry[0]+state.arrival.direction[1]*edge.entry[1]<0)continue;
+     const nextStop=stopNodes(state.stop+1).includes(edge.to)?state.stop+1:state.stop;
+     // A requested platform stop permits a cab change for a terminal turnback.
+     const arrival=nextStop!==state.stop?undefined:edge.exit?{edge:edge.id,direction:edge.exit}:state.arrival;
+     enqueue(edge.to,nextStop,state.cost+edge.metres,arrival,{key:state.key,edge});
+   }
  }
  const result=complete??best,paths:LinePath[]=[],chosen:PlatformSide[]=[];let cursor=result?.key;while(cursor&&previous.has(cursor)){const step=previous.get(cursor)!;const [node,index]=JSON.parse(cursor) as [string,number],previousIndex=(JSON.parse(step.key) as [string,number])[1];if(index!==previousIndex)chosen[index]=node===stopNode(stationIds[index],'left',.5)?'left':'right';if(step.edge.points.length)paths.push({points:step.edge.points,depths:step.edge.depths});cursor=step.key;}paths.reverse();if(cursor){const [node]=JSON.parse(cursor) as [string,number];chosen[0]=node===stopNode(stationIds[0],'left',.5)?'left':'right';}
  if(complete)return {ready:true,metres:complete.cost,paths,gaps:[],issue:'',platforms:chosen};

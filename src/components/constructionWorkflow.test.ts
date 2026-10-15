@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { PerspectiveCamera,Vector3 } from 'three';
 import { MercatorCoordinate } from 'maplibre-gl';
 import { DEFAULT_CONSTRUCTION,stationLength } from './stationPlacement';
-import { connectedStation,stationConnector,stationConnectionPorts } from './stationConnection';
+import { connectedStation,stationConnector,stationConnectionPorts,STATION_CONNECTION_LENGTH } from './stationConnection';
 import { trackGeometry,checkTrack,isTrackList,networkPorts,trackPort,trackForward,type PlacedTrack } from './trackPlacement';
 import { NetworkHistory,removeNetworkAsset } from './networkHistory';
 import { depthPosition,depthProject,depthUnproject } from './depthProjection';
@@ -24,12 +24,12 @@ test('demolition removes the selected built asset and its dependants as one reve
 test('stations attach to either free end of a blueprint or constructed pair, preserving depth, tangent and rail spacing',()=>{
  for(const stage of ['blueprint','constructed'] as const)for(const end of ['start','end'] as const){
    const parent={...track,stage},network=[parent],port=trackPort(parent,end,'pair',[],network)!;
-   const cursor=MercatorCoordinate.fromLngLat(port.position),scale=cursor.meterInMercatorCoordinateUnits();const p=new MercatorCoordinate(cursor.x+port.outward[0]*212*scale,cursor.y+port.outward[1]*212*scale).toLngLat();
+   const cursor=MercatorCoordinate.fromLngLat(port.position),scale=cursor.meterInMercatorCoordinateUnits();const p=new MercatorCoordinate(cursor.x+port.outward[0]*(200+STATION_CONNECTION_LENGTH)*scale,cursor.y+port.outward[1]*(200+STATION_CONNECTION_LENGTH)*scale).toLngLat();
    const draft=connectedStation(port,[p.lng,p.lat],DEFAULT_CONSTRUCTION,network)!;
    assert.equal(draft.station.depth,-40);assert.ok(Math.abs(stationLength(draft.station.start,draft.station.end)-200)<.02);
    const station={...draft.station,id:'joined'},connector={...stationConnector(station,draft.attachment),id:'connector'},tracks=[parent,connector];
    assert.ok(checkTrack(connector,[station],tracks).valid);assert.ok(isTrackList(tracks,[station]));assert.equal(stationConnectionPorts([station],tracks).filter(p=>'trackId' in p.ref&&p.ref.trackId==='parent'&&'end' in p.ref&&p.ref.end===end).length,0);
-   const g=trackGeometry(connector,[station],tracks)!;assert.equal(g.startDepth,g.endDepth);assert.ok(Math.abs(g.length-12)<.02);
+   const g=trackGeometry(connector,[station],tracks)!;assert.equal(g.startDepth,g.endDepth);assert.ok(Math.abs(g.length-STATION_CONNECTION_LENGTH)<.02);
    assert.ok(Math.abs(stationLength(g.lanes[0].at(-1)!,g.lanes[1].at(-1)!)-4)<.01);
    assert.equal(networkPorts([station],tracks,'parallel').filter(p=>'stationId' in p.ref&&p.ref.end==='start').length,1);
  }

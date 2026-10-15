@@ -1,7 +1,7 @@
 import { isTrackList,type PlacedTrack } from './components/trackPlacement';
 import { isStationList, type PlacedStation } from './components/stationPlacement';
 import { isUndergroundView, type UndergroundView } from './components/undergroundView';
-import { isPlanningLayers, type PlanningLayers } from './components/underground';
+import { isPlanningLayers, type PlanningLayers } from './components/planningLayers';
 import { isSavedAnalysis, type SavedAnalysis } from './components/analysisLayers';
 import { isMetroLineList,type MetroLine } from './components/metroLines';
 export interface SavedCamera { lng:number; lat:number; zoom:number; pitch:number; bearing:number; }

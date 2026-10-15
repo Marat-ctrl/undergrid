@@ -11,7 +11,7 @@ import { stretchedStation, stretchedDepot, stationLength, type ConstructionSetti
 import { installStationLayers, updateStations, updateStationGhost as writeStationGhost } from './stationLayers';
 import { missingBuildingSupports } from './buildingSupports';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
-import { applyPlanningLayers, foundationRange, foundationRisk } from './underground';
+import { applyPlanningLayers } from './planningLayers';
 import { useEffect, useRef } from 'react';
 import * as maplibre from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -70,7 +70,7 @@ export default function NewYorkMap({ lineOverlay,lineMode,lineChoosingStops,onLi
     const ports=networkPorts(c.stations,c.tracks,c.settings.tracks),magnet=magneticPort.current;
     return magnet&&!ports.some(port=>port.key===magnet.key)?[...ports,magnet]:ports;
   };
-  const syncScene=()=>{const c=constructionRef.current;sceneRef.current?.update({lineOverlay:lineRef.current.overlay,stationLabels:displayRef.current.stationLabels,stations:c.stations,tracks:c.tracks,selectedStation:c.selectedStation,selectedTrack:c.selectedTrack,ghostStation:ghostStation.current,ghostTrack:ghostTrack.current,ports:portsForTool(),hot:hotPort.current});};
+  const syncScene=()=>{const c=constructionRef.current;sceneRef.current?.update({linePicking:lineRef.current.active&&lineRef.current.choosing,lineOverlay:lineRef.current.overlay,stationLabels:displayRef.current.stationLabels,stations:c.stations,tracks:c.tracks,selectedStation:c.selectedStation,selectedTrack:c.selectedTrack,ghostStation:ghostStation.current,ghostTrack:ghostTrack.current,ports:portsForTool(),hot:hotPort.current});};
   const updateStationGhost=(map:maplibre.Map,station:PlacedStation|null)=>{ghostStation.current=station;writeStationGhost(map,station);syncScene();};
   const updateTrackGhost=(map:maplibre.Map,track:PlacedTrack|null,stationList:PlacedStation[],network:PlacedTrack[]=[])=>{ghostTrack.current=track;writeTrackGhost(map,track,stationList,network);syncScene();};
   const updatePorts=(map:maplibre.Map,stationList:PlacedStation[],mode:'single'|'parallel',visible:boolean,hot:string|null,network:PlacedTrack[]=[])=>{
@@ -113,11 +113,11 @@ export default function NewYorkMap({ lineOverlay,lineMode,lineChoosingStops,onLi
       ensureAnalysis.current=()=>{
         const options=displayRef.current;
         if(!active||!map?.getLayer('background')||options.mode==='off')return;
-        if(map.getSource('nyc-tracts')){applyAnalysisLayers(map,{mode:options.mode});return;}
+        if(map.getSource('analysis-tracts')){applyAnalysisLayers(map,{mode:options.mode});return;}
         if(analysisLoading)return;analysisLoading=true;callbacks.current.onAnalysis('loading');
         void loadAnalysisData(analysisAbort.signal).then(data=>{if(!active)return;installAnalysisLayers(map!,data);applyDisplay(map!,displayRef.current);callbacks.current.onAnalysis('ready');}).catch(()=>{if(active)callbacks.current.onAnalysis('error');}).finally(()=>{analysisLoading=false;});
       };
-      map.on('style.load',()=>{if(!active)return;const buildings=map!.getSource('building-tiles');if(buildings)buildings.calculateTileZoom=buildingTileZoom;const rail=map!.getSource('rail-tiles');if(rail){rail.tileSize=128;rail.calculateTileZoom=railTileZoom;}applyDisplay(map!,displayRef.current);installTrackLayers(map!);installStationLayers(map!);updateTracks(map!,constructionRef.current.tracks,constructionRef.current.stations,constructionRef.current.selectedTrack);updatePorts(map!,constructionRef.current.stations,constructionRef.current.settings.tracks,constructionRef.current.active&&constructionRef.current.settings.tool==='track',null,constructionRef.current.tracks);updateStations(map!,constructionRef.current.stations,constructionRef.current.selectedStation);sceneRef.current=createFlatMetroScene();map!.addLayer(sceneRef.current.layer,'building-supports-3d');map!.addLayer(sceneRef.current.elevatedLayer);syncScene();applyDisplay(map!,displayRef.current);ensureAnalysis.current();});
+      map.on('style.load',()=>{if(!active)return;const buildings=map!.getSource('building-tiles');if(buildings)buildings.calculateTileZoom=buildingTileZoom;const rail=map!.getSource('rail-tiles');if(rail){rail.tileSize=128;rail.calculateTileZoom=railTileZoom;}applyDisplay(map!,displayRef.current);installTrackLayers(map!);installStationLayers(map!);updateTracks(map!,constructionRef.current.tracks,constructionRef.current.stations,constructionRef.current.selectedTrack);updatePorts(map!,constructionRef.current.stations,constructionRef.current.settings.tracks,constructionRef.current.active&&constructionRef.current.settings.tool==='track',null,constructionRef.current.tracks);updateStations(map!,constructionRef.current.stations,constructionRef.current.selectedStation);sceneRef.current=createFlatMetroScene((id,side)=>lineRef.current.onStation(id,side));map!.addLayer(sceneRef.current.layer,'building-supports-3d');map!.addLayer(sceneRef.current.elevatedLayer);syncScene();applyDisplay(map!,displayRef.current);ensureAnalysis.current();});
       const cancel=()=>{const hadAnchor=!!anchor.current||!!trackAnchor.current;anchor.current=null;stationAnchorPort.current=null;trackAnchor.current=null;hotPort.current=null;magneticPort.current=null;straightDirection.current=null;cursor.current=null;updateStationGhost(map!,null);updateTrackGhost(map!,null,constructionRef.current.stations,constructionRef.current.tracks);constructionRef.current.onTrackHint('');updatePorts(map!,constructionRef.current.stations,constructionRef.current.settings.tracks,constructionRef.current.active&&constructionRef.current.settings.tool==='track',null,constructionRef.current.tracks);constructionRef.current.onDrawingChange(false);return hadAnchor;};
       cancelDrawing.current=cancel;
       removeGesture=attachCameraGesture(map,()=>{if(constructionRef.current.active)cancel();});
@@ -187,7 +187,7 @@ export default function NewYorkMap({ lineOverlay,lineMode,lineChoosingStops,onLi
       const trackHit=(point:{x:number;y:number})=>{const id=sceneRef.current?.hit(point,'track');return id?{properties:{trackId:id}}:null;};
       const atDepth=(point:{x:number;y:number},ground:Coordinate):Coordinate=>sceneRef.current?.unproject(point,stationAnchorPort.current?.depth??constructionRef.current.settings.depth)??ground;
       map.on('click',event=>{
-        if(lineRef.current.active){if(lineRef.current.choosing){const stop=sceneRef.current?.platformHit(event.point);if(stop)lineRef.current.onStation(stop.id,stop.side);}return;}
+        if(lineRef.current.active)return;
         const construction=constructionRef.current;
         if(construction.active){
           if(construction.settings.tool==='select'){
@@ -220,23 +220,19 @@ export default function NewYorkMap({ lineOverlay,lineMode,lineChoosingStops,onLi
           }
           if(construction.settings.tool!=='station'&&construction.settings.tool!=='depot')return;
           if(!anchor.current){stationAnchorPort.current=construction.settings.tool==='station'?nearestStationPort(event.point):null;anchor.current=stationAnchorPort.current?.position??point;if(stationAnchorPort.current)construction.onSnapDepth(stationAnchorPort.current.depth);cursor.current=point;construction.onSelectStation(null);construction.onSelectTrack(null);construction.onDrawingChange(true);paintStationDraft(map!,point);}
-          else if(stationLength(anchor.current,point)>=5){const station=stationDraft(point),attachment=stationAnchorPort.current?connectedStation(stationAnchorPort.current,point,construction.settings,construction.tracks)?.attachment:undefined;if(station){const midpoint:Coordinate=[(station.start[0]+station.end[0])/2,(station.start[1]+station.end[1])/2];const source=(sourceLayer:string)=>map!.querySourceFeatures('openmaptiles',{sourceLayer});const roads=source('transportation_name').filter(f=>!['rail','transit','aerialway','ferry'].includes(String(f.properties.class)));const name=station.kind==='depot'?station.name:nearbyStationName(midpoint,roads,['place','poi','park','water_name'].flatMap(source));construction.onPlaceStation({...station,name},attachment);cancel();}}
+          else if(stationLength(anchor.current,point)>=5){const station=stationDraft(point),attachment=stationAnchorPort.current?connectedStation(stationAnchorPort.current,point,construction.settings,construction.tracks)?.attachment:undefined;if(station){const midpoint:Coordinate=[(station.start[0]+station.end[0])/2,(station.start[1]+station.end[1])/2];const source=(sourceLayer:string)=>map!.querySourceFeatures('openmaptiles',{sourceLayer});const roads=source('transportation_name').filter(f=>!['rail','transit','aerialway','ferry'].includes(String(f.properties.class)));const name=station.kind==='depot'?station.name:nearbyStationName(midpoint,roads,['place','poi','park','water_name'].flatMap(source),station,construction.stations.map(s=>s.name));construction.onPlaceStation({...station,name},attachment);cancel();}}
           return;
         }
         const stationFeature=stationHit(event.point);
         construction.onSelectStation(stationFeature?String(stationFeature.properties.stationId):null);
         if(stationFeature){popupRef.current?.remove();construction.onSelectTrack(null);return;}
         const trackFeature=trackHit(event.point);construction.onSelectTrack(trackFeature?String(trackFeature.properties.trackId):null);if(trackFeature){popupRef.current?.remove();return;}
-        if(displayRef.current.foundations&&map?.getLayer('foundation-risk')){
-          const building=map.queryRenderedFeatures(event.point,{layers:['foundation-risk']})[0];
-          if(building){popupRef.current?.remove();const height=typeof building.properties.render_height==='number'?building.properties.render_height:null;const range=foundationRange(height);const node=document.createElement('div');node.className='tract-popup';const title=document.createElement('strong');title.textContent='Foundation · game estimate';node.append(title);const line=document.createElement('p');line.textContent=range?`Proxy depth: ${Math.round(range[0])}–${Math.round(range[1])} m`:'Unknown · no usable height';node.append(line);const status=document.createElement('p');const risk=foundationRisk(height,displayRef.current.plannedDepth);status.textContent=`Planned depth ${displayRef.current.plannedDepth} m · ${risk==='overlap'?'Potential overlap':risk==='uncertain'?'Uncertain clearance':risk==='lower'?'Lower proxy risk':'Unknown'}`;node.append(status);const note=document.createElement('small');note.textContent='Height-based gameplay proxy. Actual foundations, utilities and tunnel depths are not verified.';node.append(note);popupRef.current=new maplibre.Popup({closeOnClick:false,maxWidth:'290px'}).setLngLat(event.lngLat).setDOMContent(node).addTo(map);return;}
-        }
         if(!map?.getLayer('tract-hit-area')||displayRef.current.mode==='off')return;
         const feature=map.queryRenderedFeatures(event.point,{layers:['tract-hit-area']})[0];
         popupRef.current?.remove();if(!feature)return;
         const p=feature.properties;const node=document.createElement('div');node.className='tract-popup';
         const title=document.createElement('strong');title.textContent=p.neighborhood;node.append(title);
-        const subtitle=document.createElement('small');subtitle.textContent=`${p.borough} · Census tract ${p.tract}`;node.append(subtitle);
+        const subtitle=document.createElement('small');subtitle.textContent=p.city?`${p.city} · ${p.region}`:`${p.borough} · Census tract ${p.tract}`;node.append(subtitle);
         const format=new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
         const jobsMode=displayRef.current.mode==='jobs';
         const count=document.createElement('p');count.textContent=jobsMode?`${format.format(p.jobs)} covered jobs · LODES ${p.jobs_year}`:`${format.format(p.population)} residents · 2020 Census`;node.append(count);
@@ -247,9 +243,9 @@ export default function NewYorkMap({ lineOverlay,lineMode,lineChoosingStops,onLi
       });
       map.on('mousemove',event=>{
         if(!map)return;const construction=constructionRef.current;const hovered=sceneRef.current?.hit(event.point,'station')??null;sceneRef.current?.hover(event.point);
-        if(lineRef.current.active){map.getCanvas().style.cursor=lineRef.current.choosing&&sceneRef.current?.platformHit(event.point)?'pointer':'';return;}
+        if(lineRef.current.active){map.getCanvas().style.cursor='';return;}
         if(construction.active){if(construction.settings.tool==='select'){map.getCanvas().style.cursor=hovered||sceneRef.current?.hit(event.point,'track')?'pointer':'';return;}map.getCanvas().style.cursor='crosshair';cursor.current=atDepth(event.point,[event.lngLat.lng,event.lngLat.lat]);if(construction.settings.tool==='track')trackCursor(event.point,cursor.current,event.originalEvent.shiftKey);else if(anchor.current)paintStationDraft(map,cursor.current);else if(construction.settings.tool==='station'){const port=nearestStationPort(event.point);hotPort.current=port?.key??null;updatePorts(map,construction.stations,construction.settings.tracks,true,hotPort.current,construction.tracks);}return;}
-        const layers=displayRef.current.foundations?['foundation-risk']:displayRef.current.mode!=='off'?['tract-hit-area']:[];const available=layers.filter(id=>map?.getLayer(id));map.getCanvas().style.cursor=hovered||sceneRef.current?.hit(event.point,'track')||(available.length&&map.queryRenderedFeatures(event.point,{layers:available}).length)?'pointer':'';
+        const layers=displayRef.current.mode!=='off'?['tract-hit-area']:[];const available=layers.filter(id=>map?.getLayer(id));map.getCanvas().style.cursor=hovered||sceneRef.current?.hit(event.point,'track')||(available.length&&map.queryRenderedFeatures(event.point,{layers:available}).length)?'pointer':'';
       });
       const activeMap = map;
       controls.current = {
@@ -262,7 +258,7 @@ export default function NewYorkMap({ lineOverlay,lineMode,lineChoosingStops,onLi
     observer.observe(container.current!);
     return () => { active = false;clearTimeout(supportTimer);supportCache.clear();trackAnchor.current=null;anchor.current=null;cursor.current=null;cancelDrawing.current=()=>false;analysisAbort.abort();popupRef.current?.remove();ensureAnalysis.current=()=>{}; removeGesture?.();removeTrackKeys?.();straightHeld.current=false;straightDirection.current=null;refreshTrackPreview.current=()=>{}; clearTimeout(timer); observer.disconnect(); controls.current = null; instance.current=null; map?.remove();sceneRef.current=null;ghostStation.current=null;ghostTrack.current=null;stationAnchorPort.current=null; };
   }, [controls,initialCamera]);
-  useEffect(()=>{syncScene();},[lineOverlay]);
+  useEffect(()=>{syncScene();},[lineOverlay,lineMode,lineChoosingStops]);
   useEffect(()=>{const map=instance.current;if(map?.getLayer('background')){applyDisplay(map,display);syncScene();ensureAnalysis.current();popupRef.current?.remove();if(display.mode==='off')map.getCanvas().style.cursor='';}},[display,analysisRetry]);
   useEffect(()=>{const map=instance.current;if(!map?.getSource('player-stations'))return;updateStations(map,stations,selectedStation);updateTracks(map,tracks,stations,selectedTrack);updatePorts(map,stations,constructionSettings.tracks,constructionActive&&constructionSettings.tool==='track',hotPort.current,tracks);},[stations,selectedStation,tracks,selectedTrack]);
   useEffect(()=>{
@@ -283,17 +279,18 @@ export default function NewYorkMap({ lineOverlay,lineMode,lineChoosingStops,onLi
 
 function applyDisplay(map:maplibre.Map,display:DisplayOptions){
   applyPlanningLayers(map,display);
-  applyAnalysisLayers(map,{mode:display.mode});
   map.setPaintProperty('background','background-color',MAP_PALETTE.land);
-  for(const id of ['green-spaces','wood','parks','water'])map.setPaintProperty(id,'fill-opacity',id==='wood'?.7:id==='water'?1:.8);
+  for(const id of ['cemeteries','green-spaces','wood','parks','water'])map.setPaintProperty(id,'fill-opacity',id==='wood'?.7:id==='water'?1:id==='cemeteries'?.85:.8);
   for(const id of ['roads-major','roads-minor','waterways','paths'])map.setPaintProperty(id,'line-opacity',1);
   map.setPaintProperty('building-footprints','fill-opacity',.8);
   const detail=display.preset==='detailed';
   const visibility:Record<string,boolean>={
     'labels-places':display.preset!=='clean','labels-roads-major':display.preset!=='clean',
     'labels-neighborhoods':detail,'labels-poi':detail,
-    'paths':detail,'building-supports-3d':display.buildings&&!display.foundations,'buildings-3d':display.buildings&&!display.foundations,'building-footprints':!display.buildings&&!display.foundations
+    'paths':detail,'building-supports-3d':display.buildings,'buildings-3d':display.buildings,'building-footprints':!display.buildings
   };
   for(const layer of map.getStyle().layers??[])if(/^(player-station|cursor-station|player-track|cursor-track|station-ports)/.test(layer.id))map.setLayoutProperty(layer.id,'visibility','none');
   for(const [id,visible] of Object.entries(visibility))if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
+  // Analysis opacity must win over the basemap defaults, including on first data load.
+  applyAnalysisLayers(map,{mode:display.mode});
 }

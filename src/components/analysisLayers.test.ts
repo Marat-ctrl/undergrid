@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {applyAnalysisLayers,attachJobs,densityColor,normalizeAnalysis,populationDensity} from './analysisLayers';
+import {applyAnalysisLayers,attachJobs,densityColor,loadAnalysisData,normalizeAnalysis,populationDensity} from './analysisLayers';
 import {DEFAULT_CAMERA,isQuickSave} from '../gameSave';
 test('density uses square kilometres of land and distinguishes missing area from zero residents',()=>{
  assert.equal(populationDensity(10000,500000),20000);
@@ -38,4 +38,28 @@ test('packaged workplace counts join every tract and preserve LODES job totals a
  for(const f of merged.features){const p=f.properties!;total+=p.jobs;totals[p.borough]=(totals[p.borough]??0)+p.jobs;const expected=populationDensity(p.jobs,p.land_km2*1000000);if(expected===null)assert.equal(p.jobs_density,null);else assert.ok(Math.abs(expected-p.jobs_density)<.011);}
  assert.equal(total,4585129);assert.equal(total,jobs.jobs);assert.deepEqual(totals,jobs.borough_jobs);assert.ok(totals.Manhattan>totals.Brooklyn);
  const missing={...jobs,tracts:{...jobs.tracts}};delete missing.tracts[data.features[0].properties.geoid];assert.throws(()=>attachJobs(data,missing));assert.throws(()=>attachJobs(data,{...jobs,year:2022}));
+});
+test('Hudson County tracts preserve official population, land and covered jobs without overlapping NYC IDs',()=>{
+ const data=JSON.parse(readFileSync(new URL('../../public/data/hudson-population-2020.geojson',import.meta.url),'utf8'));
+ const jobs=JSON.parse(readFileSync(new URL('../../public/data/hudson-jobs-2023.json',import.meta.url),'utf8'));
+ const metadata=JSON.parse(readFileSync(new URL('../../public/data/hudson-analysis-metadata.json',import.meta.url),'utf8'));
+ const merged=attachJobs(data,jobs),ids=new Set();let population=0,workplaces=0,land=0;
+ assert.equal(data.features.length,183);assert.equal(Object.keys(jobs.tracts).length,183);assert.equal(jobs.workplace_blocks,2829);assert.equal(jobs.workplace_blocks,metadata.workplace_blocks);
+ for(const feature of merged.features){const p=feature.properties!;assert.match(p.geoid,/^34017\d{6}$/);assert.ok(!ids.has(p.geoid));ids.add(p.geoid);assert.ok(typeof p.city==='string'&&p.city.length>0);assert.equal(p.year,2020);assert.equal(p.jobs_year,2023);
+   population+=p.population;workplaces+=p.jobs;land+=p.land_km2;
+   assert.ok(Math.abs(populationDensity(p.population,p.land_km2*1e6)!-p.density)<.011);assert.ok(Math.abs(populationDensity(p.jobs,p.land_km2*1e6)!-p.jobs_density)<.011);
+ }
+ assert.equal(merged.features.filter(f=>f.properties?.city==='Jersey City').reduce((sum,f)=>sum+f.properties!.population,0),292449);
+ assert.equal(new Set(merged.features.map(f=>f.properties!.city)).size,12);
+ assert.equal(population,724854);assert.equal(population,metadata.population);assert.equal(workplaces,293100);assert.equal(workplaces,jobs.jobs);assert.equal(workplaces,metadata.jobs);assert.ok(Math.abs(land-119.640822)<1e-6);
+});
+test('shared analysis loader joins NYC and all Hudson municipalities into the same three map sources',async()=>{
+ const original=globalThis.fetch;
+ try{
+   globalThis.fetch=(async input=>new Response(readFileSync(new URL(`../../public/data/${String(input).split('/').at(-1)}`,import.meta.url),'utf8'))) as typeof fetch;
+   const [tracts,regions,labels]=await loadAnalysisData(new AbortController().signal);
+   assert.equal(tracts.features.length,2508);assert.equal(regions.features.length,17);assert.equal(labels.features.length,17);
+   assert.ok(regions.features.some(f=>f.properties?.name==='Jersey City'));assert.ok(tracts.features.every(f=>Number.isSafeInteger(f.properties?.jobs)&&f.properties?.jobs_year===2023));
+   assert.equal(new Set(tracts.features.map(f=>f.properties?.geoid)).size,2508);
+ }finally{globalThis.fetch=original;}
 });

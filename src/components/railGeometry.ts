@@ -2,7 +2,7 @@ import { ROUTE_TRACK_CENTRES_METRES } from './constructionDimensions';
 import { MercatorCoordinate } from 'maplibre-gl';
 import type { Coordinate } from './stationPlacement';
 export const HEAVY_METRO_LIMITS={minRadius:20,maxGrade:.16,maxGradeRate:.03};
-export const STATION_APPROACH_METRES=10;
+export const STATION_APPROACH_METRES=20;
 type XY=[number,number];
 export interface RailEnd {position:Coordinate;depth:number;outward:XY|null;halfSpacing?:number;}
 export interface RailGeometry {lanes:Coordinate[][];length:number;centre:Coordinate[];depths:number[];startDepth:number;endDepth:number;controls:[XY,XY,XY,XY];lengths:number[];startTangent:XY;endTangent:XY;}
@@ -41,7 +41,18 @@ export function railGeometry(start:RailEnd,end:RailEnd,parallel:boolean,arc:bool
    tangent=t=>{const u=1-t;return unit(3*u*u*(controls[1][0]-a[0])+6*u*t*(controls[2][0]-controls[1][0])+3*t*t*(b[0]-controls[2][0]),3*u*u*(controls[1][1]-a[1])+6*u*t*(controls[2][1]-controls[1][1])+3*t*t*(b[1]-controls[2][1]));};
    lengthHint=controls.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p[0]-controls[i][0],p[1]-controls[i][1])/scale,0);
  }
- const samples=Math.min(10000,Math.max(64,Math.ceil(lengthHint/2))),points=Array.from({length:samples+1},(_,i)=>at(i/samples));points[0]=a;points[samples]=b;
+ const samples=Math.min(10000,Math.max(64,Math.ceil(lengthHint/2))),coarse=Array.from({length:samples+1},(_,i)=>at(i/samples)),coarseLengths=[0];
+ for(let i=1;i<coarse.length;i++)coarseLengths.push(coarseLengths[i-1]+Math.hypot(coarse[i][0]-coarse[i-1][0],coarse[i][1]-coarse[i-1][1])/scale);
+ const parameters=new Set(Array.from({length:samples+1},(_,i)=>i/samples)),coarseLength=coarseLengths.at(-1)!;
+ // Resolve compact station tapers locally instead of making every long section denser.
+ const densifyApproach=(reverse:boolean)=>{const span=Math.min(STATION_APPROACH_METRES,coarseLength/2);for(let j=1;j<=32;j++){
+   const distance=reverse?coarseLength-span*j/32:span*j/32;let low=0,high=coarseLengths.length-1;
+   while(high-low>1){const middle=(low+high)>>1;if(coarseLengths[middle]<distance)low=middle;else high=middle;}
+   const fraction=(distance-coarseLengths[low])/(coarseLengths[high]-coarseLengths[low]);parameters.add((low+fraction)/samples);
+ }};
+ if(parallel&&Math.abs((start.halfSpacing??ROUTE_TRACK_CENTRES_METRES/2)-ROUTE_TRACK_CENTRES_METRES/2)>.001)densifyApproach(false);
+ if(parallel&&Math.abs((end.halfSpacing??ROUTE_TRACK_CENTRES_METRES/2)-ROUTE_TRACK_CENTRES_METRES/2)>.001)densifyApproach(true);
+ const times=[...parameters].sort((a,b)=>a-b),points=times.map(t=>{const index=Math.round(t*samples);return Math.abs(t*samples-index)<1e-9?coarse[index]:at(t);});points[0]=a;points[points.length-1]=b;
  const lengths=[0];for(let i=1;i<points.length;i++)lengths.push(lengths[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1])/scale);const total=lengths.at(-1)!;
  const centre=points.map(toCoord);
  const approach=STATION_APPROACH_METRES;
@@ -55,7 +66,7 @@ export function railGeometry(start:RailEnd,end:RailEnd,parallel:boolean,arc:bool
    if(startFixed&&endFixed){const span=Math.min(approach,total/2),middle=Math.max(normalSpacing,Math.min(sg,eg)-normalSpacing*Math.min(1,total/(2*approach))**2);return s<=total/2?sg+(middle-sg)*smooth(s/span):middle+(eg-middle)*smooth((s-(total-span))/span);}
    return normalSpacing;
  };
- const lanes=(parallel?[-1,1]:[0]).map(side=>points.map(([x,y],i)=>{const v=tangent(i/samples),offset=spacing(lengths[i])*side*scale;return toCoord([x-v[1]*offset,y+v[0]*offset]);}));
+ const lanes=(parallel?[-1,1]:[0]).map(side=>points.map(([x,y],i)=>{const v=tangent(times[i]),offset=spacing(lengths[i])*side*scale;return toCoord([x-v[1]*offset,y+v[0]*offset]);}));
  const profile=verticalProfile(total,end.depth-start.depth);
  const depths=lengths.map(s=>start.depth+profile.at(s));
  return {lanes,length:total,centre,depths,startDepth:start.depth,endDepth:end.depth,controls,lengths,startTangent:first,endTangent:last};

@@ -25,13 +25,13 @@ export default function HowToPlay({onClose}:{onClose:()=>void}){
          <li><strong>Station</strong> — click the start, stretch 50–300 m, click to finish.</li>
          <li><strong>Track</strong> — click a connection or track, then the endpoint. Hold <kbd>Shift</kbd> for straight.</li>
          <li><strong>Depot</strong> — choose 5–30 spaces, place the entrance and direction.</li>
-         <li><strong>Lines</strong> — name a route, choose a color and click platform sides in travel order.</li>
+         <li><strong>Lines</strong> — choose a name and color. Click the platform + markers in travel order.</li>
          <li><strong>Build</strong> confirms plans. <strong>Select</strong> an object to delete or demolish it.</li>
          <li>Right-click cancels drawing. <strong>Undo</strong> / <kbd>Ctrl / Cmd + Z</kbd> reverses an action.</li>
        </ul>:id==='layers'?<ul>
          <li><strong>Clean / Detailed</strong> — a quiet map or more detail with 3D buildings.</li>
-         <li><strong>Population / Jobs</strong> — density and district boundaries. Click an area for details.</li>
-         <li><strong>Existing rail / Foundations</strong> — planning overlays. Foundation depths are estimates.</li>
+         <li><strong>Population / Jobs</strong> — density and boundaries for NYC and Hudson County, NJ. Click an area for details.</li>
+         <li><strong>Existing rail</strong> — toggle mapped railway alignments.</li>
          <li>Hover a station or track for labels. <strong>Always show labels</strong> keeps them visible.</li>
        </ul>:<ul>
          <li><strong>New Game → New York → Start</strong> opens a new world.</li>
