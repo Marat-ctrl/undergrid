@@ -13,7 +13,7 @@ export interface TrackPortRef { trackId:string; end:'start'|'end'; lane:'pair'|'
 export interface TrackPointRef {trackId:string;at:number;lane:TrackPortRef['lane'];direction:1|-1;}
 export type TrackReference=TrackPortRef|TrackPointRef;
 export type TrackEndpoint=PortRef|TrackReference|{position:Coordinate;depth:number};
-export interface PlacedTrack {id:string;mode:TrackMode;stage:'blueprint'|'constructed';start:TrackEndpoint;end:TrackEndpoint;curve?:TrackCurve;}
+export interface PlacedTrack {id:string;mode:TrackMode;stage:'blueprint'|'constructed';start:TrackEndpoint;end:TrackEndpoint;curve?:TrackCurve;scissors?:boolean;}
 export interface StationPort {key:string;ref:PortRef|TrackReference;position:Coordinate;depth:number;outward:[number,number];name:string;halfSpacing?:number;}
 export const MAX_TRACKS=200;
 export function isPortRef(endpoint:TrackEndpoint):endpoint is PortRef{return 'stationId' in endpoint;}
@@ -49,7 +49,7 @@ export function trackGeometry(track:PlacedTrack,stations:PlacedStation[],tracks:
 export function checkTrack(track:PlacedTrack,stations:PlacedStation[],tracks:PlacedTrack[]=[]) {return checkRailGeometry(trackGeometry(track,stations,tracks),track.curve!==undefined);}
 export function blueprintErrors(tracks:PlacedTrack[],stations:PlacedStation[]) {return tracks.filter(t=>t.stage==='blueprint').flatMap((track,i)=>checkTrack(track,stations,tracks).issues.map(issue=>`Track ${i+1}: ${issue}`));}
 export function draftTrack(start:TrackEndpoint,end:TrackEndpoint,mode:TrackMode,stations:PlacedStation[],tracks:PlacedTrack[]=[],curve:TrackCurve='arc'):PlacedTrack|null{
- const track:PlacedTrack={id:'track-cursor',start,end,mode,stage:'blueprint',curve};return trackGeometry(track,stations,tracks)?track:null;
+ const track:PlacedTrack={id:'track-cursor',start,end,mode,stage:'blueprint',curve,...(mode==='parallel'&&[start,end].some(e=>isPortRef(e)&&stations.some(s=>s.id===e.stationId&&s.kind!=='depot'))?{scissors:true}:{})};return trackGeometry(track,stations,tracks)?track:null;
 }
 export function straightHeading(start:TrackEndpoint,cursor:Coordinate,stations:PlacedStation[],tracks:PlacedTrack[]=[]):[number,number]|null{
  const origin=resolveEndpoint(start,stations,tracks);if(!origin)return null;if(origin.outward)return origin.outward;
@@ -68,7 +68,7 @@ function validEndpoint(value:unknown,mode:TrackMode,stations:PlacedStation[],tra
  return inCity(endpoint.position)&&Number.isInteger(endpoint.depth)&&endpoint.depth>=MIN_ELEVATION&&endpoint.depth<=MAX_ELEVATION;
 }
 export function isTrackList(value:unknown,stations:PlacedStation[]):value is PlacedTrack[]{
- if(!Array.isArray(value)||value.length>MAX_TRACKS||!value.every(t=>t&&typeof t==='object'&&typeof t.id==='string'&&t.id.length>0&&t.id.length<=80&&['single','parallel'].includes(t.mode)&&['blueprint','constructed'].includes(t.stage)&&(t.curve===undefined||t.curve==='arc'||t.curve==='straight')))return false;
+ if(!Array.isArray(value)||value.length>MAX_TRACKS||!value.every(t=>t&&typeof t==='object'&&typeof t.id==='string'&&t.id.length>0&&t.id.length<=80&&['single','parallel'].includes(t.mode)&&['blueprint','constructed'].includes(t.stage)&&(t.curve===undefined||t.curve==='arc'||t.curve==='straight')&&(t.scissors===undefined||typeof t.scissors==='boolean'&&t.mode==='parallel')))return false;
  if(new Set(value.map(t=>t.id)).size!==value.length)return false;
  if(!value.every(track=>validEndpoint(track.start,track.mode,stations,value)&&validEndpoint(track.end,track.mode,stations,value)))return false;
  return value.every(track=>!!trackGeometry(track,stations,value)&&[track.start,track.end].every(endpoint=>track.stage!=='constructed'||(isPortRef(endpoint)?stations.find(s=>s.id===endpoint.stationId)?.stage==='constructed':isTrackReference(endpoint)?value.find(t=>t.id===endpoint.trackId)?.stage==='constructed':true)));

@@ -53,7 +53,7 @@ test('station taper ends within 10 m even on long sections',()=>{
  const islandStations=stations.map(s=>s.id==='first'?{...s,layout:'island' as const}:s);
  const track:PlacedTrack={...pair,id:'long',end:{position:[-73.98,40.712],depth:-25}};
  const geometry=trackGeometry(track,islandStations)!;
- assert.ok(Math.abs(stationLength(geometry.lanes[0][0],geometry.lanes[1][0] )-8)<.02);
+ assert.ok(Math.abs(stationLength(geometry.lanes[0][0],geometry.lanes[1][0] )-12)<.02);
  const after=geometry.lengths.findIndex(d=>d>=10);
  assert.ok(geometry.lengths[after]<13);
  for(const i of [after,Math.floor(geometry.centre.length/2),geometry.centre.length-1])assert.ok(Math.abs(stationLength(geometry.lanes[0][i],geometry.lanes[1][i])-4)<.02);

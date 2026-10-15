@@ -22,7 +22,7 @@ export function quickSaveHandler(root:string){
       }
       if(req.method!=='POST'){res.setHeader('Allow','GET, POST');send(405,{error:'Method not allowed.'});return;}
       if(!req.headers['content-type']?.startsWith('application/json')){send(415,{error:'JSON required.'});return;}
-      let body='';for await(const chunk of req){body+=chunk.toString();if(Buffer.byteLength(body)>65536){send(413,{error:'Save is too large.'});return;}}
+      let body='';for await(const chunk of req){body+=chunk.toString();if(Buffer.byteLength(body)>262144){send(413,{error:'Save is too large.'});return;}}
       let save:unknown;try{save=JSON.parse(body);}catch{send(400,{error:'Invalid JSON.'});return;}
       if(!isQuickSave(save)){send(400,{error:'Invalid quick save.'});return;}
       const clean=normalizeSave(save);

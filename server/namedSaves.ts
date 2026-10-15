@@ -27,7 +27,7 @@ export function namedSavesHandler(root:string){
      }
      if(req.method!=='POST'||id){res.setHeader('Allow',id?'GET':'GET, POST');send(405,{error:'Method not allowed.'});return;}
      if(!req.headers['content-type']?.startsWith('application/json')){send(415,{error:'JSON required.'});return;}
-     const chunks:Buffer[]=[];let size=0;for await(const chunk of req){const bytes=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);size+=bytes.length;if(size>131072){send(413,{error:'Save is too large.'});return;}chunks.push(bytes);}const body=Buffer.concat(chunks).toString('utf8');
+     const chunks:Buffer[]=[];let size=0;for await(const chunk of req){const bytes=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);size+=bytes.length;if(size>262144){send(413,{error:'Save is too large.'});return;}chunks.push(bytes);}const body=Buffer.concat(chunks).toString('utf8');
      let input:unknown;try{input=JSON.parse(body);}catch{send(400,{error:'Invalid JSON.'});return;}
      if(!input||typeof input!=='object'||!('name' in input)||!validSaveName(input.name)||!('game' in input)||!isQuickSave(input.game)){send(400,{error:'Enter a save name (1–60 characters) and a valid world.'});return;}
      const save:NamedSave={version:1,id:randomUUID(),name:input.name.trim(),createdAt:Date.now(),game:{...normalizeSave(input.game),active:true}};

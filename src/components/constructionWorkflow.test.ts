@@ -5,9 +5,22 @@ import { MercatorCoordinate } from 'maplibre-gl';
 import { DEFAULT_CONSTRUCTION,stationLength } from './stationPlacement';
 import { connectedStation,stationConnector,stationConnectionPorts } from './stationConnection';
 import { trackGeometry,checkTrack,isTrackList,networkPorts,trackPort,trackForward,type PlacedTrack } from './trackPlacement';
-import { NetworkHistory } from './networkHistory';
+import { NetworkHistory,removeNetworkAsset } from './networkHistory';
 import { depthPosition,depthProject,depthUnproject } from './depthProjection';
 const track:PlacedTrack={id:'parent',stage:'blueprint',curve:'straight',mode:'parallel',start:{position:[-74.01,40.71],depth:-40},end:{position:[-74.005,40.71],depth:-40}};
+test('demolition removes the selected built asset and its dependants as one reversible operation',()=>{
+ const station={id:'station',name:'Station',start:[-74.01,40.71] as [number,number],end:[-74.008,40.71] as [number,number],depth:-10,layout:'side' as const,stage:'constructed' as const};
+ const depot={...station,id:'depot',name:'Depot',kind:'depot' as const,capacity:10};
+ for(const asset of [station,depot]){
+   const parent:PlacedTrack={...track,id:'connected',stage:'constructed',start:{stationId:asset.id,end:'start',lane:'pair'}};
+   const branch:PlacedTrack={...track,id:'branch',stage:'constructed',start:{trackId:parent.id,at:.5,lane:'pair',direction:1}};
+   const snapshot={stations:[asset],tracks:[parent,branch,{...track,id:'independent'}]},history=new NetworkHistory();history.push(snapshot);
+   assert.equal(removeNetworkAsset(snapshot,asset.id,null,'blueprint'),snapshot);
+   const removed=removeNetworkAsset(snapshot,asset.id,null,'constructed');assert.equal(removed.stations.length,0);assert.deepEqual(removed.tracks.map(t=>t.id),['independent']);assert.deepEqual(history.pop(),snapshot);
+   const removedTrack=removeNetworkAsset(snapshot,null,parent.id,'constructed');assert.deepEqual(removedTrack.stations,[asset]);assert.deepEqual(removedTrack.tracks.map(t=>t.id),['independent']);
+   assert.equal(removeNetworkAsset(snapshot,'missing',null,'constructed'),snapshot);assert.equal(snapshot.tracks.length,3);
+ }
+});
 test('stations attach to either free end of a blueprint or constructed pair, preserving depth, tangent and rail spacing',()=>{
  for(const stage of ['blueprint','constructed'] as const)for(const end of ['start','end'] as const){
    const parent={...track,stage},network=[parent],port=trackPort(parent,end,'pair',[],network)!;
@@ -134,7 +147,7 @@ test('physical station metres match geographic map scale for all layouts and ele
    const s=stretchedStation([-74.007,40.712],[-74.00699,40.712],{...DEFAULT_CONSTRUCTION,platforms:layout,depth:elevation})!;
    assert.ok(isStationList([s]));assert.ok(Math.abs(new LngLat(...s.start).distanceTo(new LngLat(...s.end))-50)<.1);
    for(const f of stationFeatures([s]).features.filter(f=>f.properties?.kind==='platform')){if(f.geometry.type!=='Polygon')throw new Error('Expected platform');const r=f.geometry.coordinates[0] as [number,number][];
-     assert.ok(Math.abs(new LngLat(...r[1]).distanceTo(new LngLat(...r[2]))-4)<.01);
+     assert.ok(Math.abs(new LngLat(...r[1]).distanceTo(new LngLat(...r[2]))-(layout==='island'?8:4))<.01);
      const a=MercatorCoordinate.fromLngLat(r[0],elevation),b=MercatorCoordinate.fromLngLat(r[0],elevation+1);assert.ok(Math.abs((b.z-a.z)/a.meterInMercatorCoordinateUnits()-1)<1e-9);
    }
    assert.ok(stationFeatures([s]).features.find(f=>f.properties?.kind==='label')!.properties!.label.includes(`${elevationText(elevation)} m`));
@@ -239,9 +252,11 @@ test('pointer magnetism follows continuous rail geometry and recovers physical p
 
 test('compact station layouts and four-metre depot decks preserve clearance at every capacity',async()=>{
  const {stationFeatures,stretchedStation,stretchedDepot}=await import('./stationPlacement');
+ const {stationPort}=await import('./trackPlacement');
  for(const layout of ['side','island'] as const){const station=stretchedStation([-74.01,40.71],[-74.008,40.71],{...DEFAULT_CONSTRUCTION,platforms:layout})!,features=stationFeatures([station]).features,rails=features.filter(f=>f.properties?.kind==='track');
-   const points=rails.map(f=>f.geometry.type==='LineString'?f.geometry.coordinates[0] as [number,number]:station.start);assert.ok(Math.abs(stationLength(points[0],points[1])-(layout==='side'?4:8))<.01);
-   for(const f of features.filter(f=>f.properties?.kind==='platform')){if(f.geometry.type!=='Polygon')throw new Error('Expected platform');const ring=f.geometry.coordinates[0] as [number,number][];assert.ok(Math.abs(stationLength(ring[1],ring[2])-4)<.01);}
+   const points=rails.map(f=>f.geometry.type==='LineString'?f.geometry.coordinates[0] as [number,number]:station.start);assert.ok(Math.abs(stationLength(points[0],points[1])-(layout==='side'?4:12))<.01);
+   for(const [i,rail] of rails.entries()){if(rail.geometry.type!=='LineString')throw new Error('Expected rail');for(const end of ['start','end'] as const)assert.ok(stationLength(stationPort(station,end,i===0?'left':'right').position,rail.geometry.coordinates[end==='start'?0:1] as [number,number])<.001);}
+   for(const f of features.filter(f=>f.properties?.kind==='platform')){if(f.geometry.type!=='Polygon')throw new Error('Expected platform');const ring=f.geometry.coordinates[0] as [number,number][];assert.ok(Math.abs(stationLength(ring[1],ring[2])-(layout==='island'?8:4))<.01);}
  }
  for(let capacity=5;capacity<=30;capacity++){const depot=stretchedDepot([-74.01,40.71],[-74.008,40.71],{...DEFAULT_CONSTRUCTION,capacity})!,features=stationFeatures([depot]).features;
    const platforms=features.filter(f=>f.properties?.kind==='platform');assert.equal(platforms.length,Math.ceil(capacity/2));

@@ -1,3 +1,4 @@
+import { MAP_PALETTE } from './theme';
 import { useEffect, useRef } from 'react';
 import { Layers, LoaderCircle, RotateCcw } from 'lucide-react';
 import type { DisplayOptions } from './mapStyle';
@@ -11,7 +12,7 @@ export function MapLayersMenu({display,onChange,onPlanning,open,onOpenChange,onS
 }
 export function AnalysisLegend({display,status,onRetry}:{display:DisplayOptions;status:AnalysisStatus;onRetry:()=>void}){
  if(display.mode==='off'&&!display.foundations&&!display.existingRail)return null;
- const rail=display.existingRail&&<div className="rail-legend"><strong>Existing rail</strong><span style={{color:'#536759'}}>━ Surface / untagged</span><span style={{color:'#577894'}}>━ Bridge</span><span style={{color:'#8e729e'}}>┄ Tunnel</span><small>Mapped alignments · tunnel depths unknown</small></div>;
+ const rail=display.existingRail&&<div className="rail-legend"><strong>Existing rail</strong><span style={{color:MAP_PALETTE.railSurface}}>━ Surface / untagged</span><span style={{color:MAP_PALETTE.railBridge}}>━ Bridge</span><span style={{color:MAP_PALETTE.railTunnel}}>┄ Tunnel</span><small>Mapped alignments · tunnel depths unknown</small></div>;
  if(display.foundations)return <aside className="analysis-legend" aria-label="Foundation legend"><div className="legend-heading"><strong>Foundations · estimated</strong><span>{display.plannedDepth} m</span></div><div className="foundation-key">{Object.entries(FOUNDATION_COLORS).map(([key,color])=><span key={key}><i style={{background:color}}/>{key==='overlap'?'Potential overlap':key==='uncertain'?'Uncertain clearance':key==='lower'?'Lower proxy risk':'Unknown height'}</span>)}</div><small>Gameplay proxy, not construction clearance. Zoom in to view footprints.</small>{rail}</aside>;
  if(display.mode==='off')return <aside className="analysis-legend" aria-label="Existing rail legend">{rail}</aside>;
  const jobs=display.mode==='jobs',stops=jobs?JOB_DENSITY_STOPS:DENSITY_STOPS;

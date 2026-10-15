@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { namedSavesHandler } from './namedSaves';
 import { DEFAULT_CAMERA,type QuickSave } from '../src/gameSave';
 import { DEFAULT_CONSTRUCTION,stretchedStation } from '../src/components/stationPlacement';
-const world:QuickSave={version:1,city:'new-york',active:true,updatedAt:100,camera:{...DEFAULT_CAMERA,pitch:50,bearing:35},preset:'detailed',stationLabels:true,analysis:{mode:'jobs'},stations:[{...stretchedStation([-74.007,40.712],[-74.006,40.712],DEFAULT_CONSTRUCTION)!,id:'station',name:'Station 1',stage:'constructed'}],tracks:[{id:'track',mode:'parallel',stage:'constructed',curve:'straight',start:{stationId:'station',end:'end',lane:'pair'},end:{position:[-74.003,40.712],depth:-35}},{id:'branch',mode:'single',stage:'constructed',curve:'arc',start:{trackId:'track',at:.42,lane:'right',direction:1},end:{position:[-74.001,40.713],depth:-35}}]};
+const world:QuickSave={version:1,city:'new-york',active:true,updatedAt:100,camera:{...DEFAULT_CAMERA,pitch:50,bearing:35},preset:'detailed',stationLabels:true,lines:[{id:'line',name:'Harbor',color:'#568674',stationIds:['station','station2'],platforms:['right','right']}],analysis:{mode:'jobs'},stations:[{...stretchedStation([-74.007,40.712],[-74.006,40.712],DEFAULT_CONSTRUCTION)!,id:'station',name:'Station 1',stage:'constructed'},{...stretchedStation([-74.003,40.712],[-74.002,40.712],{...DEFAULT_CONSTRUCTION,depth:-35})!,id:'station2',name:'Station 2',stage:'constructed'}],tracks:[{id:'track',mode:'parallel',stage:'constructed',scissors:true,curve:'straight',start:{stationId:'station',end:'end',lane:'pair'},end:{stationId:'station2',end:'start',lane:'pair'}},{id:'branch',mode:'single',stage:'constructed',curve:'arc',start:{trackId:'track',at:.42,lane:'right',direction:1},end:{position:[-74.001,40.713],depth:-35}}]};
 async function fixture(){const root=await mkdtemp(join(tmpdir(),'undergrid-named-'));const start=async()=>{const handler=namedSavesHandler(root),server=createServer((req,res)=>{void handler(req,res,()=>{res.statusCode=404;res.end();});});server.listen(0,'127.0.0.1');await once(server,'listening');return {server,url:`http://127.0.0.1:${(server.address() as {port:number}).port}/api/saves`};};return {root,start,...await start()};}
 test('named snapshots persist independently, keep duplicate names and restore full worlds after a server restart',async()=>{
  const f=await fixture();let {server,url}=f;
@@ -28,6 +28,7 @@ test('named saves reject invalid writes and identifiers without touching existin
  try{
    const post=(data:unknown)=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
    const saved=await (await post({name:'../Snapshot',game:world})).json();
+   assert.equal((await post({name:'Wrong line',game:{...world,lines:[{...world.lines![0],stationIds:['station']}]}})).status,400);
    for(const name of ['', ' '.repeat(5),'a'.repeat(61),'bad\nname'])assert.equal((await post({name,game:world})).status,400);
    assert.equal((await post({name:'Wrong',game:{...world,tracks:[{...world.tracks![0],start:{trackId:'missing',at:.5,lane:'pair',direction:1}}]}})).status,400);
    assert.equal((await fetch(url,{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://unrelated.example'},body:JSON.stringify({name:'Wrong',game:world})})).status,403);

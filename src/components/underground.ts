@@ -1,7 +1,7 @@
 import type { ExpressionSpecification, Map } from 'maplibre-gl';
 export interface PlanningLayers { existingRail:boolean; foundations:boolean; plannedDepth:number; }
 export const DEFAULT_PLANNING:PlanningLayers={existingRail:false,foundations:false,plannedDepth:25};
-export const FOUNDATION_COLORS={overlap:'#ac6555',uncertain:'#c5a16b',lower:'#6c8d9c',unknown:'#969b90'};
+export const FOUNDATION_COLORS={overlap:'#303030',uncertain:'#858585',lower:'#c6c6c6',unknown:'#e3e3e3'};
 export function isPlanningLayers(value:unknown):value is PlanningLayers {
  if(!value||typeof value!=='object')return false;const v=value as PlanningLayers;
  return typeof v.existingRail==='boolean'&&typeof v.foundations==='boolean'&&Number.isInteger(v.plannedDepth)&&v.plannedDepth>=5&&v.plannedDepth<=100;

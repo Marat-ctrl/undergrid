@@ -1,5 +1,8 @@
+import { MAP_PALETTE } from './theme';
+import { nearbyStationName } from './stationNames';
 import { elevationText } from './constructionDimensions';
 import { createFlatMetroScene } from './FlatMetroScene';
+import type { LineOverlay,PlatformSide } from './metroLines';
 import { connectedStation,stationConnector,stationConnectionPorts,type StationAttachment } from './stationConnection';
 import { networkPorts,type StationPort } from './trackPlacement';
 import { draftTrack,checkTrack,resolveEndpoint,isTrackPointRef,orientTrackPoint,straightHeading,straightPosition,type PlacedTrack,type TrackEndpoint } from './trackPlacement';
@@ -22,7 +25,8 @@ maplibre.setWorkerUrl(mapWorkerUrl);
 export const NEW_YORK_BOUNDS: maplibre.LngLatBoundsLike = [[-74.32, 40.47], [-73.65, 40.98]];
 export type MapStatus = 'loading' | 'ready' | 'error';
 export interface MapControls { north: () => void; tilt:()=>void;cancelStation:()=>boolean; }
-export default function NewYorkMap({ onStatus, controls, display, initialCamera, onCamera, onAnalysis, analysisRetry, stations, selectedStation, constructionActive, constructionSettings, onPlaceStation, onSelectStation, onDrawingChange, tracks, selectedTrack, onPlaceTrack, onSelectTrack, onTrackHint,onSnapDepth }: {
+export default function NewYorkMap({ lineOverlay,lineMode,lineChoosingStops,onLineStation,onStatus, controls, display, initialCamera, onCamera, onAnalysis, analysisRetry, stations, selectedStation, constructionActive, constructionSettings, onPlaceStation, onSelectStation, onDrawingChange, tracks, selectedTrack, onPlaceTrack, onSelectTrack, onTrackHint,onSnapDepth }: {
+  lineOverlay:LineOverlay[];lineMode:boolean;lineChoosingStops:boolean;onLineStation:(id:string,side:PlatformSide)=>void;
   onStatus: (status: MapStatus) => void;
   controls: React.RefObject<MapControls | null>;
   display: DisplayOptions;
@@ -41,6 +45,8 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
   tracks:PlacedTrack[];selectedTrack:string|null;
   onPlaceTrack:(track:PlacedTrack)=>void;onSelectTrack:(id:string|null)=>void;onTrackHint:(hint:string)=>void;
 }) {
+  const lineRef=useRef({overlay:lineOverlay,active:lineMode,choosing:lineChoosingStops,onStation:onLineStation});
+  lineRef.current={overlay:lineOverlay,active:lineMode,choosing:lineChoosingStops,onStation:onLineStation};
   const constructionRef=useRef({active:constructionActive,settings:constructionSettings,stations,selectedStation,onPlaceStation,onSelectStation,onDrawingChange,tracks,selectedTrack,onPlaceTrack,onSelectTrack,onTrackHint,onSnapDepth});
   constructionRef.current={active:constructionActive,settings:constructionSettings,stations,selectedStation,onPlaceStation,onSelectStation,onDrawingChange,tracks,selectedTrack,onPlaceTrack,onSelectTrack,onTrackHint,onSnapDepth};
   const trackAnchor=useRef<TrackEndpoint|null>(null),hotPort=useRef<string|null>(null),magneticPort=useRef<StationPort|null>(null);
@@ -64,7 +70,7 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
     const ports=networkPorts(c.stations,c.tracks,c.settings.tracks),magnet=magneticPort.current;
     return magnet&&!ports.some(port=>port.key===magnet.key)?[...ports,magnet]:ports;
   };
-  const syncScene=()=>{const c=constructionRef.current;sceneRef.current?.update({stationLabels:displayRef.current.stationLabels,stations:c.stations,tracks:c.tracks,selectedStation:c.selectedStation,selectedTrack:c.selectedTrack,ghostStation:ghostStation.current,ghostTrack:ghostTrack.current,ports:portsForTool(),hot:hotPort.current});};
+  const syncScene=()=>{const c=constructionRef.current;sceneRef.current?.update({lineOverlay:lineRef.current.overlay,stationLabels:displayRef.current.stationLabels,stations:c.stations,tracks:c.tracks,selectedStation:c.selectedStation,selectedTrack:c.selectedTrack,ghostStation:ghostStation.current,ghostTrack:ghostTrack.current,ports:portsForTool(),hot:hotPort.current});};
   const updateStationGhost=(map:maplibre.Map,station:PlacedStation|null)=>{ghostStation.current=station;writeStationGhost(map,station);syncScene();};
   const updateTrackGhost=(map:maplibre.Map,track:PlacedTrack|null,stationList:PlacedStation[],network:PlacedTrack[]=[])=>{ghostTrack.current=track;writeTrackGhost(map,track,stationList,network);syncScene();};
   const updatePorts=(map:maplibre.Map,stationList:PlacedStation[],mode:'single'|'parallel',visible:boolean,hot:string|null,network:PlacedTrack[]=[])=>{
@@ -99,7 +105,7 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
       map = new maplibre.Map({
         container: container.current!, center: [initialCamera.lng,initialCamera.lat], zoom:initialCamera.zoom,pitch:initialCamera.pitch,bearing:initialCamera.bearing,
         minZoom: 10, maxZoom: 18, maxBounds: NEW_YORK_BOUNDS,
-        renderWorldCopies: false,boxZoom:!(constructionRef.current.active&&constructionRef.current.settings.tool==='track'), pitchWithRotate: false, dragRotate: false, bearingSnap:0, aroundCenter:false,
+        renderWorldCopies: false,boxZoom:!constructionRef.current.active, pitchWithRotate: false, dragRotate: false, bearingSnap:0, aroundCenter:false,
         touchPitch: true, maxPitch:70, pixelRatio:Math.min(devicePixelRatio,2), attributionControl: false,
         style: createMapStyle()
       });
@@ -181,8 +187,15 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
       const trackHit=(point:{x:number;y:number})=>{const id=sceneRef.current?.hit(point,'track');return id?{properties:{trackId:id}}:null;};
       const atDepth=(point:{x:number;y:number},ground:Coordinate):Coordinate=>sceneRef.current?.unproject(point,stationAnchorPort.current?.depth??constructionRef.current.settings.depth)??ground;
       map.on('click',event=>{
+        if(lineRef.current.active){if(lineRef.current.choosing){const stop=sceneRef.current?.platformHit(event.point);if(stop)lineRef.current.onStation(stop.id,stop.side);}return;}
         const construction=constructionRef.current;
         if(construction.active){
+          if(construction.settings.tool==='select'){
+            const station=stationHit(event.point),track=station?null:trackHit(event.point);
+            construction.onSelectStation(station?String(station.properties.stationId):null);
+            construction.onSelectTrack(track?String(track.properties.trackId):null);
+            return;
+          }
           const point:Coordinate=atDepth(event.point,[event.lngLat.lng,event.lngLat.lat]);
           if(construction.settings.tool==='track'){
             const {port,end,draft}=trackCursor(event.point,point,event.originalEvent.shiftKey);
@@ -202,11 +215,12 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
             const port=construction.settings.tool==='station'?nearestStationPort(event.point):null;
             const hit=port?null:stationHit(event.point);
             if(hit){construction.onSelectStation(String(hit.properties.stationId));return;}
+            const track=port?null:trackHit(event.point);if(track){construction.onSelectTrack(String(track.properties.trackId));return;}
             if(!port&&(construction.selectedStation||construction.selectedTrack)){construction.onSelectStation(null);construction.onSelectTrack(null);}
           }
           if(construction.settings.tool!=='station'&&construction.settings.tool!=='depot')return;
           if(!anchor.current){stationAnchorPort.current=construction.settings.tool==='station'?nearestStationPort(event.point):null;anchor.current=stationAnchorPort.current?.position??point;if(stationAnchorPort.current)construction.onSnapDepth(stationAnchorPort.current.depth);cursor.current=point;construction.onSelectStation(null);construction.onSelectTrack(null);construction.onDrawingChange(true);paintStationDraft(map!,point);}
-          else if(stationLength(anchor.current,point)>=5){const station=stationDraft(point),attachment=stationAnchorPort.current?connectedStation(stationAnchorPort.current,point,construction.settings,construction.tracks)?.attachment:undefined;if(station){construction.onPlaceStation(station,attachment);cancel();}}
+          else if(stationLength(anchor.current,point)>=5){const station=stationDraft(point),attachment=stationAnchorPort.current?connectedStation(stationAnchorPort.current,point,construction.settings,construction.tracks)?.attachment:undefined;if(station){const midpoint:Coordinate=[(station.start[0]+station.end[0])/2,(station.start[1]+station.end[1])/2];const source=(sourceLayer:string)=>map!.querySourceFeatures('openmaptiles',{sourceLayer});const roads=source('transportation_name').filter(f=>!['rail','transit','aerialway','ferry'].includes(String(f.properties.class)));const name=station.kind==='depot'?station.name:nearbyStationName(midpoint,roads,['place','poi','park','water_name'].flatMap(source));construction.onPlaceStation({...station,name},attachment);cancel();}}
           return;
         }
         const stationFeature=stationHit(event.point);
@@ -233,7 +247,8 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
       });
       map.on('mousemove',event=>{
         if(!map)return;const construction=constructionRef.current;const hovered=sceneRef.current?.hit(event.point,'station')??null;sceneRef.current?.hover(event.point);
-        if(construction.active){map.getCanvas().style.cursor='crosshair';cursor.current=atDepth(event.point,[event.lngLat.lng,event.lngLat.lat]);if(construction.settings.tool==='track')trackCursor(event.point,cursor.current,event.originalEvent.shiftKey);else if(anchor.current)paintStationDraft(map,cursor.current);else if(construction.settings.tool==='station'){const port=nearestStationPort(event.point);hotPort.current=port?.key??null;updatePorts(map,construction.stations,construction.settings.tracks,true,hotPort.current,construction.tracks);}return;}
+        if(lineRef.current.active){map.getCanvas().style.cursor=lineRef.current.choosing&&sceneRef.current?.platformHit(event.point)?'pointer':'';return;}
+        if(construction.active){if(construction.settings.tool==='select'){map.getCanvas().style.cursor=hovered||sceneRef.current?.hit(event.point,'track')?'pointer':'';return;}map.getCanvas().style.cursor='crosshair';cursor.current=atDepth(event.point,[event.lngLat.lng,event.lngLat.lat]);if(construction.settings.tool==='track')trackCursor(event.point,cursor.current,event.originalEvent.shiftKey);else if(anchor.current)paintStationDraft(map,cursor.current);else if(construction.settings.tool==='station'){const port=nearestStationPort(event.point);hotPort.current=port?.key??null;updatePorts(map,construction.stations,construction.settings.tracks,true,hotPort.current,construction.tracks);}return;}
         const layers=displayRef.current.foundations?['foundation-risk']:displayRef.current.mode!=='off'?['tract-hit-area']:[];const available=layers.filter(id=>map?.getLayer(id));map.getCanvas().style.cursor=hovered||sceneRef.current?.hit(event.point,'track')||(available.length&&map.queryRenderedFeatures(event.point,{layers:available}).length)?'pointer':'';
       });
       const activeMap = map;
@@ -247,11 +262,13 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
     observer.observe(container.current!);
     return () => { active = false;clearTimeout(supportTimer);supportCache.clear();trackAnchor.current=null;anchor.current=null;cursor.current=null;cancelDrawing.current=()=>false;analysisAbort.abort();popupRef.current?.remove();ensureAnalysis.current=()=>{}; removeGesture?.();removeTrackKeys?.();straightHeld.current=false;straightDirection.current=null;refreshTrackPreview.current=()=>{}; clearTimeout(timer); observer.disconnect(); controls.current = null; instance.current=null; map?.remove();sceneRef.current=null;ghostStation.current=null;ghostTrack.current=null;stationAnchorPort.current=null; };
   }, [controls,initialCamera]);
+  useEffect(()=>{syncScene();},[lineOverlay]);
   useEffect(()=>{const map=instance.current;if(map?.getLayer('background')){applyDisplay(map,display);syncScene();ensureAnalysis.current();popupRef.current?.remove();if(display.mode==='off')map.getCanvas().style.cursor='';}},[display,analysisRetry]);
   useEffect(()=>{const map=instance.current;if(!map?.getSource('player-stations'))return;updateStations(map,stations,selectedStation);updateTracks(map,tracks,stations,selectedTrack);updatePorts(map,stations,constructionSettings.tracks,constructionActive&&constructionSettings.tool==='track',hotPort.current,tracks);},[stations,selectedStation,tracks,selectedTrack]);
   useEffect(()=>{
     const map=instance.current;if(!map)return;
-    if(constructionActive&&constructionSettings.tool==='track')map.boxZoom.disable();else map.boxZoom.enable();
+    // MapLibre reserves Shift + left mouse for box zoom, swallowing placement clicks.
+    if(constructionActive)map.boxZoom.disable();else map.boxZoom.enable();
     if(!map.getSource('station-cursor'))return;
     const changed=previousTool.current!==constructionSettings.tool||(constructionSettings.tool==='track'&&previousMode.current!==constructionSettings.tracks);
     previousTool.current=constructionSettings.tool;previousMode.current=constructionSettings.tracks;
@@ -259,7 +276,7 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
     else if(anchor.current&&cursor.current)paintStationDraft(map,cursor.current);
     else if(trackAnchor.current&&cursor.current)refreshTrackPreview.current();
     updatePorts(map,stations,constructionSettings.tracks,constructionActive&&constructionSettings.tool==='track',hotPort.current,tracks);
-    map.getCanvas().style.cursor=constructionActive?'crosshair':'';
+    map.getCanvas().style.cursor=constructionActive&&constructionSettings.tool!=='select'?'crosshair':'';
   },[constructionActive,constructionSettings]);
   return <div ref={container} className="ny-map" aria-label="New York OpenStreetMap world" />;
 }
@@ -267,8 +284,8 @@ export default function NewYorkMap({ onStatus, controls, display, initialCamera,
 function applyDisplay(map:maplibre.Map,display:DisplayOptions){
   applyPlanningLayers(map,display);
   applyAnalysisLayers(map,{mode:display.mode});
-  map.setPaintProperty('background','background-color','#f0f0e8');
-  for(const id of ['wood','parks','water'])map.setPaintProperty(id,'fill-opacity',id==='wood'?.7:id==='parks'?.8:1);
+  map.setPaintProperty('background','background-color',MAP_PALETTE.land);
+  for(const id of ['green-spaces','wood','parks','water'])map.setPaintProperty(id,'fill-opacity',id==='wood'?.7:id==='water'?1:.8);
   for(const id of ['roads-major','roads-minor','waterways','paths'])map.setPaintProperty(id,'line-opacity',1);
   map.setPaintProperty('building-footprints','fill-opacity',.8);
   const detail=display.preset==='detailed';

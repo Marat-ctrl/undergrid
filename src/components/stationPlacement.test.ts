@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { MercatorCoordinate } from 'maplibre-gl';
 import { DEFAULT_CONSTRUCTION, stretchedStation, stretchedDepot, stationLength, isStationList, stationFeatures } from './stationPlacement';
 import { isQuickSave,DEFAULT_CAMERA } from '../gameSave';
 const start:[number,number]=[-74.007,40.712];
@@ -40,4 +41,27 @@ test('depot placement fixes yard length and validates capacity, depth and footpr
    for(const bad of [4,31,5.5,undefined])assert.equal(isStationList([{...depot,capacity:bad}]),false);
  }
  assert.equal(stretchedDepot([-73.6501,40.712],[-73.649,40.712],{...DEFAULT_CONSTRUCTION,capacity:30}),null);
+});
+
+test('depot fans bend smoothly while retaining entrance ports, storage rails and service clearances',async()=>{
+ const {stationPort}=await import('./trackPlacement');
+ for(const capacity of [5,10,30])for(const cursor of [[-74.005,40.712],[-74.006,40.714]] as [number,number][]){
+   const depot=stretchedDepot(start,cursor,{...DEFAULT_CONSTRUCTION,capacity})!,features=stationFeatures([depot]).features;
+   assert.ok(isStationList([depot]));
+   const tracks=features.filter(f=>f.properties?.kind==='track');assert.equal(tracks.length,capacity);
+   for(const feature of tracks){
+     if(feature.geometry.type!=='LineString')throw new Error('Expected a depot rail');
+     const path=feature.geometry.coordinates as [number,number][],points=path.map(p=>MercatorCoordinate.fromLngLat(p));
+     assert.ok(path.length>30);
+     assert.ok(['left','right'].some(lane=>stationLength(path[0],stationPort(depot,'start',lane as 'left'|'right').position)<.001));
+     let maxAngle=0;for(let i=1;i<points.length-1;i++){
+       const a=points[i-1],b=points[i],c=points[i+1],dx=b.x-a.x,dy=b.y-a.y,ex=c.x-b.x,ey=c.y-b.y;
+       const cosine=(dx*ex+dy*ey)/(Math.hypot(dx,dy)*Math.hypot(ex,ey));
+       maxAngle=Math.max(maxAngle,Math.acos(Math.max(-1,Math.min(1,cosine))));
+     }
+     assert.ok(maxAngle<.25,`Fan should have no sharp corners: ${maxAngle}`);
+     const head=points[1],tip=points.at(-1)!,tail=points.at(-2)!,origin=points[0];
+     assert.ok(Math.abs((head.x-origin.x)*(tip.y-tail.y)-(head.y-origin.y)*(tip.x-tail.x))<1e-13);
+   }
+ }
 });

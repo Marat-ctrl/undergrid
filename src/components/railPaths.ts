@@ -2,6 +2,8 @@ import { MercatorCoordinate } from 'maplibre-gl';
 import type { Coordinate } from './stationPlacement';
 
 export const RAIL_GAUGE_METRES=1.5;
+// Blend a distant track centre into its two physical rails over a continuous zoom range.
+export function railDetailForZoom(zoom:number){const t=Math.max(0,Math.min(1,(zoom-16)/1.5));return t*t*(3-2*t);}
 type Direction=[number,number];
 const unit=(x:number,y:number):Direction=>{const length=Math.hypot(x,y);return length>1e-14?[x/length,y/length]:[1,0];};
 

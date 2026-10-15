@@ -1,10 +1,10 @@
-import { MIN_ELEVATION,MAX_ELEVATION,MIN_STATION_LENGTH,MAX_STATION_LENGTH,PLATFORM_WIDTH_METRES,stationHalfSpacing,ROUTE_TRACK_CENTRES_METRES,PLATFORM_TRACK_OFFSET_METRES,DEPOT_PLATFORM_WIDTH_METRES,depotRowOffsets,elevationText } from './constructionDimensions';
+import { MIN_ELEVATION,MAX_ELEVATION,MIN_STATION_LENGTH,MAX_STATION_LENGTH,PLATFORM_WIDTH_METRES,ISLAND_PLATFORM_WIDTH_METRES,stationHalfSpacing,ROUTE_TRACK_CENTRES_METRES,PLATFORM_TRACK_OFFSET_METRES,DEPOT_PLATFORM_WIDTH_METRES,depotRowOffsets,elevationText } from './constructionDimensions';
 import { MercatorCoordinate } from 'maplibre-gl';
 import type { Feature, FeatureCollection, Geometry, Position } from 'geojson';
 export type Coordinate=[number,number];
 export type StationLayout='side'|'island';
-export interface ConstructionSettings { tool:'station'|'track'|'depot'; platforms:StationLayout; tracks:'single'|'parallel'; depth:number;capacity:number; }
-export const DEFAULT_CONSTRUCTION:ConstructionSettings={tool:'station',platforms:'side',tracks:'parallel',depth:-25,capacity:10};
+export interface ConstructionSettings { tool:'station'|'track'|'depot'|'select'; platforms:StationLayout; tracks:'single'|'parallel'; depth:number;capacity:number; }
+export const DEFAULT_CONSTRUCTION:ConstructionSettings={tool:'station',platforms:'side',tracks:'parallel',depth:-10,capacity:10};
 export interface PlacedStation { id:string; name:string; start:Coordinate; end:Coordinate; depth:number; layout:StationLayout; stage:'blueprint'|'constructed';kind?:'depot';capacity?:number; }
 export const MAX_STATIONS=200;
 export function inCity(point:unknown):point is Coordinate{return Array.isArray(point)&&point.length===2&&point.every(Number.isFinite)&&point[0]>=-74.32&&point[0]<=-73.65&&point[1]>=40.47&&point[1]<=40.98;}
@@ -45,7 +45,9 @@ export function stationFeatures(stations:PlacedStation[],selected:string|null=nu
      polygon('envelope',throat+40,length/2+5,rows[0]-2,rows.at(-1)!+(capacity%2?PLATFORM_TRACK_OFFSET_METRES+DEPOT_PLATFORM_WIDTH_METRES+2:2));
      for(let i=0;i<capacity;i++){
        const offset=rows[i],inlet=offset<0?-inletSpacing:inletSpacing;
-       features.push({type:'Feature',properties:{...props,kind:'track'},geometry:{type:'LineString',coordinates:[position(throat,inlet),position(throat+20,inlet),position(throat+80,offset),position(length/2-10,offset)]}});
+       // Zero first/second lateral derivatives make both joins tangent to the straight rails.
+       const fan=Array.from({length:33},(_,j)=>{const t=j/32,s=t*t*t*(10+t*(-15+6*t));return position(throat+20+60*t,inlet+(offset-inlet)*s);});
+       features.push({type:'Feature',properties:{...props,kind:'track'},geometry:{type:'LineString',coordinates:[position(throat,inlet),...fan,position(length/2-10,offset)]}});
      }
      // A service deck between each pair serves both tracks; an odd last track has its own deck.
      for(let i=0;i<capacity;i+=2){const inner=rows[i]+PLATFORM_TRACK_OFFSET_METRES;polygon('platform',throat+85,length/2-15,inner,inner+DEPOT_PLATFORM_WIDTH_METRES);}
@@ -60,7 +62,7 @@ export function stationFeatures(stations:PlacedStation[],selected:string|null=nu
      polygon('envelope',platformStart-margin,platformEnd+margin,-platformOuter-margin,platformOuter+margin);
      for(const side of [-1,1])polygon('platform',platformStart,platformEnd,side<0?-platformOuter:platformInner,side<0?-platformInner:platformOuter);
    }else{
-     const margin=3,platformHalfWidth=PLATFORM_WIDTH_METRES/2;
+     const margin=3,platformHalfWidth=ISLAND_PLATFORM_WIDTH_METRES/2;
      polygon('envelope',-length/2+5-margin,length/2-5+margin,-platformHalfWidth-margin,platformHalfWidth+margin);
      polygon('platform',-length/2+5,length/2-5,-platformHalfWidth,platformHalfWidth);
    }
